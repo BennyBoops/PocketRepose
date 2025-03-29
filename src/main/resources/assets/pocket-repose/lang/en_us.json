@@ -1,0 +1,24 @@
+{
+  "item.pocket-repose.keystone": "Traveler's Key",
+
+  "block.pocket-repose.suitcase": "Traveler's Suitcase",
+  "block.pocket-repose.black_suitcase": "Traveler's Suitcase",
+  "block.pocket-repose.gray_suitcase": "Traveler's Suitcase",
+  "block.pocket-repose.light_gray_suitcase": "Traveler's Suitcase",
+  "block.pocket-repose.white_suitcase": "Traveler's Suitcase",
+  "block.pocket-repose.red_suitcase": "Traveler's Suitcase",
+  "block.pocket-repose.orange_suitcase": "Traveler's Suitcase",
+  "block.pocket-repose.yellow_suitcase": "Traveler's Suitcase",
+  "block.pocket-repose.lime_suitcase": "Traveler's Suitcase",
+  "block.pocket-repose.green_suitcase": "Traveler's Suitcase",
+  "block.pocket-repose.cyan_suitcase": "Traveler's Suitcase",
+  "block.pocket-repose.light_blue_suitcase": "Traveler's Suitcase",
+  "block.pocket-repose.blue_suitcase": "Traveler's Suitcase",
+  "block.pocket-repose.purple_suitcase": "Traveler's Suitcase",
+  "block.pocket-repose.magenta_suitcase": "Traveler's Suitcase",
+  "block.pocket-repose.pink_suitcase": "Traveler's Suitcase",
+
+  "block.pocket-repose.portal": "Portal Block",
+
+  "itemgroup.pocket": "Pocket Repose"
+}

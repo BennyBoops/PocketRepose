@@ -1,0 +1,14 @@
+{
+  "parent": "item/generated",
+  "textures": {
+    "layer0": "pocket-repose:item/keystone"
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "custom_model_data": 1
+      },
+      "model": "pocket-repose:item/keystone_unnamed"
+    }
+  ]
+}

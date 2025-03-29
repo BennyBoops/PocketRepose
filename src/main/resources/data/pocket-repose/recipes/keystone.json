@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "GNG",
+    "NTN",
+    "GNG"
+  ],
+  "key": {
+    "N": {
+      "item": "minecraft:netherite_ingot"
+    },
+    "G": {
+      "item": "minecraft:gold_ingot"
+    },
+    "T": {
+      "item": "minecraft:tripwire_hook"
+    }
+  },
+  "result": {
+    "item": "pocket-repose:keystone",
+    "count": 1
+  }
+}

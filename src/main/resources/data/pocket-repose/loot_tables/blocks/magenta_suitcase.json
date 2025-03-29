@@ -1,0 +1,27 @@
+{
+  "type": "minecraft:block",
+  "pools": [
+    {
+      "rolls": 1,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "pocket-repose:magenta_suitcase",
+          "functions": [
+            {
+              "function": "minecraft:copy_nbt",
+              "source": "block_entity",
+              "ops": [
+                {
+                  "source": "DimensionSeed",
+                  "target": "BlockEntityTag.DimensionSeed",
+                  "op": "replace"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
