@@ -1,0 +1,44 @@
+{
+	"schemaVersion": 1,
+	"id": "pocket-repose",
+	"version": "${version}",
+	"name": "Pocket Repose",
+	"description": "A mod created for explorers in need of a trustworthy home.",
+	"authors": [
+		"BennyBoops"
+	],
+	"contact": {
+		"homepage": "https://fabricmc.net/",
+		"sources": "https://github.com/FabricMC/fabric-example-mod"
+	},
+	"license": "MIT",
+	"icon": "assets/pocket-repose/icon.png",
+	"environment": "*",
+	"entrypoints": {
+		"main": [
+			"net.bennyboops.modid.PocketRepose"
+		],
+		"client": [
+			"net.bennyboops.modid.PocketReposeClient"
+		],
+		"fabric-datagen": [
+			"net.bennyboops.modid.PocketReposeDataGenerator"
+		]
+	},
+	"mixins": [
+		"pocket-repose.mixins.json"
+	],
+	"depends": {
+		"fabricloader": ">=0.16.9",
+		"minecraft": "~1.20.1",
+		"java": ">=17",
+		"fabric-api": "*"
+	},
+	"suggests": {
+		"another-mod": "*"
+	},
+
+	"custom": {
+		"fabric-dimensions:use_custom_dimensions": true
+	}
+}

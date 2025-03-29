@@ -1,0 +1,15 @@
+{
+  "type": "crafting_shapeless",
+  "ingredients": [
+    {
+      "item": "minecraft:cyan_dye"
+    },
+    {
+      "tag": "pocket-repose:suitcases"
+    }
+  ],
+  "result": {
+    "item": "pocket-repose:cyan_suitcase",
+    "count": 1
+  }
+}

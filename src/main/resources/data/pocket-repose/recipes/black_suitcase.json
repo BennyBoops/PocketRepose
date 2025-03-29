@@ -1,0 +1,15 @@
+{
+  "type": "crafting_shapeless",
+  "ingredients": [
+    {
+      "item": "minecraft:black_dye"
+    },
+    {
+      "tag": "pocket-repose:suitcases"
+    }
+  ],
+  "result": {
+    "item": "pocket-repose:black_suitcase",
+    "count": 1
+  }
+}
