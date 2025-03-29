@@ -1,9 +1,9 @@
 <h1 style="color: gold;">Pocket Repose</h1>
 
 HELLO FRIENDS!
-Pocket Repose is a Minecraft mod that introduces the Traveler's Suitcase block, offering players access to their very own pocket dimension. 
-Pocket dimensions are created through renaming the Keystone item. 
-Every dimension is unique to the Keystone's name, allowing for privacy and multiplayer fun.
+  Pocket Repose is a Minecraft mod that introduces the Traveler's Suitcase block, offering players access to their very own pocket dimension. 
+  Pocket dimensions are created through renaming the Keystone item. 
+  Every dimension is unique to the Keystone's name, allowing for privacy and multiplayer fun.
 
 ## Features
 
