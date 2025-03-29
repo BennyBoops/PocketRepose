@@ -135,7 +135,13 @@ public class PocketPortalBlock extends Block {
                 SuitcaseBlockEntity.EnteredPlayerData exitData = suitcase.getExitPosition(player.getUuidAsString());
 
                 if (exitData != null) {
-                    // Execute teleport
+                    // Verify the suitcase position matches where we expect it to be
+                    if (!exitData.suitcasePos.equals(suitcasePos)) {
+                        // Suitcase was moved, update the registry with the current position
+                        player.sendMessage(Text.literal("§6Suitcase has been relocated!"), false);
+                    }
+
+                    // Execute teleport using the entry point coordinates, not the current suitcase position
                     teleportToPosition(world, player, overworld, exitData.x, exitData.y, exitData.z, exitData.yaw, player.getPitch());
 
                     // Unforce the chunk after a short delay
@@ -156,6 +162,9 @@ public class PocketPortalBlock extends Block {
 
     // Method 2: Try to find the suitcase as an item entity in the world
     private boolean attemptSuitcaseItemTeleport(World world, ServerWorld overworld, ServerPlayerEntity player, String keystoneName) {
+        // Log the attempt for debugging
+        player.sendMessage(Text.literal("§7Searching for your suitcase in the world..."), true);
+
         // Search in a radius around the last known suitcase position or player's stored position
         BlockPos searchCenter = null;
 
@@ -163,14 +172,17 @@ public class PocketPortalBlock extends Block {
         BlockPos suitcasePos = SuitcaseBlockEntity.findSuitcasePosition(keystoneName, player.getUuidAsString());
         if (suitcasePos != null) {
             searchCenter = suitcasePos;
+            player.sendMessage(Text.literal("§7Searching near registered position..."), false);
         } else {
             // Fall back to player's last known position
             PlayerPositionData lastPos = LAST_KNOWN_POSITIONS.get(player.getUuidAsString());
             if (lastPos != null) {
                 searchCenter = new BlockPos((int)lastPos.x, (int)lastPos.y, (int)lastPos.z);
+                player.sendMessage(Text.literal("§7Searching near your last position..."), false);
             } else {
                 // If we have no reference point, use world spawn
                 searchCenter = overworld.getSpawnPos();
+                player.sendMessage(Text.literal("§7No reference point found, searching near spawn..."), false);
             }
         }
 
@@ -178,51 +190,66 @@ public class PocketPortalBlock extends Block {
         int centerX = searchCenter.getX() >> 4; // Convert to chunk coordinates
         int centerZ = searchCenter.getZ() >> 4;
 
-        // Search in loaded chunks around the center
-        for (int x = centerX - SEARCH_RADIUS_CHUNKS; x <= centerX + SEARCH_RADIUS_CHUNKS; x++) {
-            for (int z = centerZ - SEARCH_RADIUS_CHUNKS; z <= centerZ + SEARCH_RADIUS_CHUNKS; z++) {
-                // Check if the chunk is loaded
-                if (!overworld.isChunkLoaded(x, z)) {
-                    continue;
+        // Optimize search by starting from nearest chunks and expanding outward
+        for (int radius = 0; radius <= SEARCH_RADIUS_CHUNKS; radius++) {
+            for (int x = centerX - radius; x <= centerX + radius; x++) {
+                for (int z = centerZ - radius; z <= centerZ + radius; z++) {
+                    // Only search the perimeter of this radius to avoid rechecking inner chunks
+                    if (radius > 0 && x > centerX - radius && x < centerX + radius &&
+                            z > centerZ - radius && z < centerZ + radius) {
+                        continue;
+                    }
+
+                    // Check if the chunk is loaded
+                    if (!overworld.isChunkLoaded(x, z)) {
+                        continue;
+                    }
+
+                    // Get the chunk
+                    WorldChunk chunk = overworld.getChunk(x, z);
+
+                    // Search for suitcase items in this chunk
+                    List<ItemEntity> itemEntities = overworld.getEntitiesByClass(
+                            ItemEntity.class,
+                            new Box(chunk.getPos().getStartX(), 0, chunk.getPos().getStartZ(),
+                                    chunk.getPos().getEndX(), 256, chunk.getPos().getEndZ()),
+                            itemEntity -> {
+                                ItemStack stack = itemEntity.getStack();
+                                if (!stack.hasNbt()) return false;
+
+                                NbtCompound beTag = stack.getSubNbt("BlockEntityTag");
+                                if (beTag == null) return false;
+
+                                return beTag.contains("BoundKeystone") &&
+                                        keystoneName.equals(beTag.getString("BoundKeystone"));
+                            }
+                    );
+
+                    if (!itemEntities.isEmpty()) {
+                        ItemEntity suitcaseItem = itemEntities.get(0);
+
+                        // Clean up player entry from the item NBT data
+                        cleanUpSuitcaseItemNbt(suitcaseItem, player, keystoneName);
+
+                        player.sendMessage(Text.literal("§6Found your suitcase!"), true);
+
+
+                        // Teleport to the item entity location
+                        teleportToPosition(world, player, overworld,
+                                suitcaseItem.getX(), suitcaseItem.getY() + 1.0, suitcaseItem.getZ(),
+                                player.getYaw(), player.getPitch());
+                        return true;
+                    }
                 }
+            }
 
-                // Get the chunk
-                WorldChunk chunk = overworld.getChunk(x, z);
-
-                // Search for suitcase items in this chunk
-                List<ItemEntity> itemEntities = overworld.getEntitiesByClass(
-                        ItemEntity.class,
-                        new Box(chunk.getPos().getStartX(), 0, chunk.getPos().getStartZ(),
-                                chunk.getPos().getEndX(), 256, chunk.getPos().getEndZ()),
-                        itemEntity -> {
-                            ItemStack stack = itemEntity.getStack();
-                            if (!stack.hasNbt()) return false;
-
-                            NbtCompound beTag = stack.getSubNbt("BlockEntityTag");
-                            if (beTag == null) return false;
-
-                            return beTag.contains("BoundKeystone") &&
-                                    keystoneName.equals(beTag.getString("BoundKeystone"));
-                        }
-                );
-
-                if (!itemEntities.isEmpty()) {
-                    ItemEntity suitcaseItem = itemEntities.get(0);
-
-                    // Clean up player entry from the item NBT data
-                    cleanUpSuitcaseItemNbt(suitcaseItem, player, keystoneName);
-
-                    player.sendMessage(Text.literal("§6Found your suitcase!"), true);
-
-                    // Teleport to the item entity location
-                    teleportToPosition(world, player, overworld,
-                            suitcaseItem.getX(), suitcaseItem.getY() + 1.0, suitcaseItem.getZ(),
-                            player.getYaw(), player.getPitch());
-                    return true;
-                }
+            // If we've searched a significant area with no results, provide feedback
+            if (radius % 4 == 0 && radius > 0) {
+                player.sendMessage(Text.literal("§7Expanded search radius to " + radius + " chunks..."), false);
             }
         }
 
+        player.sendMessage(Text.literal("§cCouldn't find your suitcase in the world."), true);
         return false;
     }
 
@@ -328,4 +355,15 @@ public class PocketPortalBlock extends Block {
             }
         }
     }
+    private boolean isSuitcaseValid(ServerWorld world, BlockPos pos) {
+        if (pos == null || !world.isChunkLoaded(pos.getX() >> 4, pos.getZ() >> 4)) {
+            return false;
+        }
+
+        BlockEntity entity = world.getBlockEntity(pos);
+        return entity instanceof SuitcaseBlockEntity;
+    }
+
+    // Then update the attemptSuitcaseTeleport method to handle relocation:
+
 }

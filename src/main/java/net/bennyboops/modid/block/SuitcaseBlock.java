@@ -59,7 +59,6 @@ public class SuitcaseBlock extends BlockWithEntity {
     }
     private static final Map<String, Map<String, BlockPos>> SUITCASE_REGISTRY = new HashMap<>();
 
-    // Block placement and creation methods
     @Override
     public void onPlaced(World world, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack itemStack) {
         super.onPlaced(world, pos, state, placer, itemStack);
@@ -75,11 +74,11 @@ public class SuitcaseBlock extends BlockWithEntity {
                     String keystoneName = suitcase.getBoundKeystoneName();
                     if (keystoneName != null) {
                         List<SuitcaseBlockEntity.EnteredPlayerData> players = suitcase.getEnteredPlayers();
+
+                        // Update registry and player data positions for all entered players
                         for (SuitcaseBlockEntity.EnteredPlayerData player : players) {
-                            Map<String, BlockPos> suitcases = SUITCASE_REGISTRY.computeIfAbsent(
-                                    keystoneName, k -> new HashMap<>()
-                            );
-                            suitcases.put(player.uuid, pos);
+                            // Update the stored position in the player data
+                            suitcase.updatePlayerSuitcasePosition(player.uuid, pos);
                         }
                     }
                 }
@@ -127,7 +126,7 @@ public class SuitcaseBlock extends BlockWithEntity {
 
                     // Add warning if players are inside
                     if (!suitcase.getEnteredPlayers().isEmpty()) {
-                        Text warningText = Text.literal("§c⚠ Contains " + suitcase.getEnteredPlayers().size() + " traveler(s)!")
+                        Text warningText = Text.literal("§c⚠ Contains " + suitcase.getEnteredPlayers().size() + " Traveler's!")
                                 .formatted(Formatting.RED);
                         lore.add(NbtString.of(Text.Serializer.toJson(warningText)));
                     }

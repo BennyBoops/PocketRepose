@@ -93,10 +93,6 @@ public class SuitcaseBlockEntity extends BlockEntity {
         return allowedDimensions.contains(world.getRegistryKey());
     }
 
-    /**
-     * Set whether this suitcase is locked to only opening in specific dimensions
-     * @param locked true to restrict to overworld only, false to allow anywhere
-     */
     public void setDimensionLocked(boolean locked) {
         this.dimensionLocked = locked;
         markDirty();
@@ -209,8 +205,9 @@ public class SuitcaseBlockEntity extends BlockEntity {
         return nbt;
     }
 
-    // Static registry of suitcase positions
-    static final Map<String, Map<String, BlockPos>> SUITCASE_REGISTRY = new HashMap<>();
+//    static final Map<String, Map<String, BlockPos>> SUITCASE_REGISTRY = new HashMap<>();
+
+    public static final Map<String, Map<String, BlockPos>> SUITCASE_REGISTRY = Collections.synchronizedMap(new HashMap<>());
 
     // Find a suitcase position
     public static BlockPos findSuitcasePosition(String keystoneName, String playerUuid) {
@@ -241,6 +238,7 @@ public class SuitcaseBlockEntity extends BlockEntity {
         // Remove empty maps
         SUITCASE_REGISTRY.entrySet().removeIf(entry -> entry.getValue().isEmpty());
     }
+
     public List<EnteredPlayerData> getEnteredPlayers() {
         return enteredPlayers;
     }
@@ -260,5 +258,36 @@ public class SuitcaseBlockEntity extends BlockEntity {
             Map<String, BlockPos> players = destination.computeIfAbsent(entry.getKey(), k -> new HashMap<>());
             players.putAll(entry.getValue());
         }
+    }
+
+    public void updatePlayerSuitcasePosition(String playerUuid, BlockPos newPos) {
+        // First, update the entered players list
+        for (int i = 0; i < enteredPlayers.size(); i++) {
+            EnteredPlayerData data = enteredPlayers.get(i);
+            if (data.uuid.equals(playerUuid)) {
+                // Create a new data object with the updated suitcase position
+                // BUT keep the original exit coordinates
+                EnteredPlayerData updatedData = new EnteredPlayerData(
+                        data.uuid,
+                        data.x, data.y, data.z,
+                        data.pitch, data.yaw,
+                        newPos
+                );
+
+                // Replace the old data with the updated version
+                enteredPlayers.set(i, updatedData);
+                break;
+            }
+        }
+
+        // Then, also update the registry to ensure consistency
+        if (boundKeystoneName != null) {
+            Map<String, BlockPos> suitcases = SUITCASE_REGISTRY.computeIfAbsent(
+                    boundKeystoneName, k -> new HashMap<>()
+            );
+            suitcases.put(playerUuid, newPos);
+        }
+
+        markDirty();
     }
 }
