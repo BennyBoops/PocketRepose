@@ -34,6 +34,7 @@ public class SuitcaseRegistryState extends PersistentState {
                 playerNbt.putInt("X", pos.getX());
                 playerNbt.putInt("Y", pos.getY());
                 playerNbt.putInt("Z", pos.getZ());
+
                 playersList.add(playerNbt);
             }
             keystoneNbt.put("Players", playersList);

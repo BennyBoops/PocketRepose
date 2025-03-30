@@ -19,7 +19,7 @@ import java.util.*;
 public class SuitcaseBlockEntity extends BlockEntity {
     private String boundKeystoneName;
     private boolean isLocked = false;
-    private boolean dimensionLocked = true; // Default to true for safety
+    private boolean dimensionLocked = true;
     private final List<EnteredPlayerData> enteredPlayers = new ArrayList<>();
     public static class EnteredPlayerData {
         public final String uuid;

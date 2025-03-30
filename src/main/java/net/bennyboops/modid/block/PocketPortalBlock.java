@@ -5,6 +5,7 @@ import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.entity.ItemEntity;
+import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
@@ -59,6 +60,70 @@ public class PocketPortalBlock extends Block {
         );
     }
 
+    private boolean attemptPlayerInventorySuitcaseTeleport(World world, ServerWorld overworld, ServerPlayerEntity player, String keystoneName) {
+        for (ServerPlayerEntity serverPlayer : world.getServer().getPlayerManager().getPlayerList()) {
+            if (scanPlayerInventoryForSuitcase(serverPlayer, player, keystoneName, world, overworld)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean scanPlayerInventoryForSuitcase(ServerPlayerEntity inventoryOwner, ServerPlayerEntity exitingPlayer,
+                                                   String keystoneName, World world, ServerWorld overworld) {
+        for (int i = 0; i < inventoryOwner.getInventory().size(); i++) {
+            ItemStack stack = inventoryOwner.getInventory().getStack(i);
+            if (isSuitcaseItemWithKeystone(stack, keystoneName)) {
+                cleanUpSuitcaseItemNbt(stack, exitingPlayer, keystoneName);
+                inventoryOwner.getInventory().setStack(i, stack);
+                teleportToPosition(world, exitingPlayer, overworld,
+                        inventoryOwner.getX(), inventoryOwner.getY() + 1.0, inventoryOwner.getZ(),
+                        exitingPlayer.getYaw(), exitingPlayer.getPitch());
+
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isSuitcaseItemWithKeystone(ItemStack stack, String keystoneName) {
+        if (stack.isEmpty() || !(stack.getItem() instanceof BlockItem) ||
+                !(((BlockItem) stack.getItem()).getBlock() instanceof SuitcaseBlock)) {
+            return false;
+        }
+
+        if (!stack.hasNbt()) return false;
+        NbtCompound beTag = stack.getSubNbt("BlockEntityTag");
+        if (beTag == null) return false;
+
+        return beTag.contains("BoundKeystone") && keystoneName.equals(beTag.getString("BoundKeystone"));
+    }
+
+    private void cleanUpSuitcaseItemNbt(ItemStack stack, ServerPlayerEntity player, String keystoneName) {
+        if (!stack.hasNbt()) return;
+        NbtCompound beTag = stack.getSubNbt("BlockEntityTag");
+        if (beTag == null) return;
+        if (beTag.contains("EnteredPlayers", NbtElement.LIST_TYPE)) {
+            NbtList playersList = beTag.getList("EnteredPlayers", NbtElement.COMPOUND_TYPE);
+            NbtList newPlayersList = new NbtList();
+            boolean playerFound = false;
+            for (int i = 0; i < playersList.size(); i++) {
+                NbtCompound playerData = playersList.getCompound(i);
+                if (!player.getUuidAsString().equals(playerData.getString("UUID"))) {
+                    newPlayersList.add(playerData);
+                } else {
+                    playerFound = true;
+                }
+            }
+            if (playerFound) {
+                beTag.put("EnteredPlayers", newPlayersList);
+                int remainingPlayers = newPlayersList.size();
+                updateItemLore(stack, remainingPlayers);
+            }
+        }
+        SuitcaseBlockEntity.removeSuitcaseEntry(keystoneName, player.getUuidAsString());
+    }
+
     @Override
     public void onEntityCollision(BlockState state, World world, BlockPos pos, Entity entity) {
         if (!world.isClient && entity instanceof ServerPlayerEntity player) {
@@ -69,20 +134,34 @@ public class PocketPortalBlock extends Block {
                 world.playSound(null, pos, SoundEvents.ITEM_BUNDLE_DROP_CONTENTS, SoundCategory.PLAYERS, 2.0f, 1.0f);
                 ServerWorld overworld = world.getServer().getWorld(World.OVERWORLD);
                 if (overworld == null) return;
-                boolean teleported = attemptSuitcaseTeleport(world, overworld, player, keystoneName);
+
+                boolean teleported = false;
+
+                // Method 1: Try to teleport to the original suitcase block entity
+                teleported = attemptSuitcaseTeleport(world, overworld, player, keystoneName);
+
+                // Method 2: Try to find suitcase in a player's inventory (new method)
                 if (!teleported) {
-                    teleported = attemptSuitcaseItemTeleport(world, world.getServer().getWorld(World.OVERWORLD), player, keystoneName);
+                    teleported = attemptPlayerInventorySuitcaseTeleport(world, overworld, player, keystoneName);
                 }
+
+                // Method 3: Try to find the suitcase as an item entity in the world
                 if (!teleported) {
-                    teleported = attemptLastKnownPositionTeleport(world, world.getServer().getWorld(World.OVERWORLD), player);
+                    teleported = attemptSuitcaseItemTeleport(world, overworld, player, keystoneName);
                 }
+
+                // Method 4: Try to use player's last known position
                 if (!teleported) {
-                    overworld = world.getServer().getWorld(World.OVERWORLD);
-                    if (overworld != null) {
-                        player.sendMessage(Text.literal("§cCouldn't find your return point. Taking you to spawn."), true);
-                        teleportToPosition(world, player, overworld, overworld.getSpawnPos().getX() + 0.5,
-                                overworld.getSpawnPos().getY() + 1.0, overworld.getSpawnPos().getZ() + 0.5, 0, 0);
-                    }
+                    teleported = attemptLastKnownPositionTeleport(world, overworld, player);
+                }
+
+                // Fallback: Take them to spawn
+                if (!teleported) {
+                    player.sendMessage(Text.literal("§cCouldn't find your return point. Taking you to spawn.").formatted(Formatting.RED), true);
+                    teleportToPosition(world, player, overworld,
+                            overworld.getSpawnPos().getX() + 0.5,
+                            overworld.getSpawnPos().getY() + 1.0,
+                            overworld.getSpawnPos().getZ() + 0.5, 0, 0);
                 }
                 SuitcaseBlockEntity.removeSuitcaseEntry(keystoneName, player.getUuidAsString());
                 LAST_KNOWN_POSITIONS.remove(player.getUuidAsString());
@@ -124,20 +203,16 @@ public class PocketPortalBlock extends Block {
 
     // Method 2: Try to find the suitcase as an item entity in the world
     private boolean attemptSuitcaseItemTeleport(World world, ServerWorld overworld, ServerPlayerEntity player, String keystoneName) {
-        player.sendMessage(Text.literal("§7Searching for your suitcase in the world..."), true);
         BlockPos searchCenter = null;
         BlockPos suitcasePos = SuitcaseBlockEntity.findSuitcasePosition(keystoneName, player.getUuidAsString());
         if (suitcasePos != null) {
             searchCenter = suitcasePos;
-            player.sendMessage(Text.literal("§7Searching near registered position..."), false);
         } else {
             PlayerPositionData lastPos = LAST_KNOWN_POSITIONS.get(player.getUuidAsString());
             if (lastPos != null) {
                 searchCenter = new BlockPos((int)lastPos.x, (int)lastPos.y, (int)lastPos.z);
-                player.sendMessage(Text.literal("§7Searching near your last position..."), false);
             } else {
                 searchCenter = overworld.getSpawnPos();
-                player.sendMessage(Text.literal("§7No reference point found, searching near spawn..."), false);
             }
         }
         int centerX = searchCenter.getX() >> 4;
@@ -171,7 +246,6 @@ public class PocketPortalBlock extends Block {
                     if (!itemEntities.isEmpty()) {
                         ItemEntity suitcaseItem = itemEntities.get(0);
                         cleanUpSuitcaseItemNbt(suitcaseItem, player, keystoneName);
-                        player.sendMessage(Text.literal("§6Found your suitcase!"), true);
                         teleportToPosition(world, player, overworld,
                                 suitcaseItem.getX(), suitcaseItem.getY() + 1.0, suitcaseItem.getZ(),
                                 player.getYaw(), player.getPitch());
@@ -180,7 +254,6 @@ public class PocketPortalBlock extends Block {
                 }
             }
         }
-        player.sendMessage(Text.literal("§cCouldn't find your suitcase in the world."), true);
         return false;
     }
 
@@ -200,6 +273,7 @@ public class PocketPortalBlock extends Block {
         }
         return false;
     }
+
     private void teleportToPosition(World world, ServerPlayerEntity player, ServerWorld targetWorld,
                                     double x, double y, double z, float yaw, float pitch) {
         player.requestTeleport(x, y, z);

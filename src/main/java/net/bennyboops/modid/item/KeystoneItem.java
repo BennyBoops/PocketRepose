@@ -141,8 +141,6 @@ public class KeystoneItem extends Item {
                         .resolve("pending_structures");
                 Files.createDirectories(structureMarkerPath);
                 Files.writeString(structureMarkerPath.resolve(dimensionName + ".txt"), "pending");
-
-                server.getGameRules().get(GameRules.KEEP_INVENTORY).set(true, server);
                 return true;
             }
             return false;
