@@ -19,6 +19,5 @@ public class ModBlockEntities {
             );
 
     public static void registerBlockEntities() {
-        // Registration happens above
     }
 }

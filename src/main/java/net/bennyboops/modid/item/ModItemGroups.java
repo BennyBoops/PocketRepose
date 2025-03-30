@@ -3,7 +3,6 @@ package net.bennyboops.modid.item;
 import net.bennyboops.modid.PocketRepose;
 import net.bennyboops.modid.block.ModBlocks;
 import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
-import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.item.ItemGroup;
 import net.minecraft.item.ItemStack;
