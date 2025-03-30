@@ -21,8 +21,6 @@ public class SuitcaseBlockEntity extends BlockEntity {
     private boolean isLocked = false;
     private boolean dimensionLocked = true; // Default to true for safety
     private final List<EnteredPlayerData> enteredPlayers = new ArrayList<>();
-    private static final String LAST_KNOWN_POS_KEY = "LastKnownPos";
-
     public static class EnteredPlayerData {
         public final String uuid;
         public final double x;
@@ -31,7 +29,6 @@ public class SuitcaseBlockEntity extends BlockEntity {
         public final float pitch;
         public final float yaw;
         public final BlockPos suitcasePos;
-
         public EnteredPlayerData(String uuid, double x, double y, double z, float pitch, float yaw, BlockPos suitcasePos) {
             this.uuid = uuid;
             this.x = x;
@@ -41,7 +38,6 @@ public class SuitcaseBlockEntity extends BlockEntity {
             this.yaw = yaw;
             this.suitcasePos = suitcasePos;
         }
-
         public NbtCompound toNbt() {
             NbtCompound nbt = new NbtCompound();
             nbt.putString("UUID", uuid);
@@ -55,7 +51,6 @@ public class SuitcaseBlockEntity extends BlockEntity {
             nbt.putInt("SuitcaseZ", suitcasePos.getZ());
             return nbt;
         }
-
         public static EnteredPlayerData fromNbt(NbtCompound nbt) {
             return new EnteredPlayerData(
                     nbt.getString("UUID"),
@@ -79,23 +74,14 @@ public class SuitcaseBlockEntity extends BlockEntity {
 
     public boolean canOpenInDimension(World world) {
         if (!dimensionLocked) {
-            return true; // If not dimension locked, can open anywhere
+            return true;
         }
-
-        // Define allowed dimensions
         Set<RegistryKey<World>> allowedDimensions = Set.of(
                 World.OVERWORLD
                 //World.NETHER,
                 //World.END
         );
-
-        // Check if the current world is in the allowed list
         return allowedDimensions.contains(world.getRegistryKey());
-    }
-
-    public void setDimensionLocked(boolean locked) {
-        this.dimensionLocked = locked;
-        markDirty();
     }
 
     public boolean isDimensionLocked() {
@@ -103,37 +89,36 @@ public class SuitcaseBlockEntity extends BlockEntity {
     }
 
     public void playerEntered(ServerPlayerEntity player) {
-        // Remove existing entries for this player first (cleanup)
         enteredPlayers.removeIf(data -> data.uuid.equals(player.getUuidAsString()));
-
         EnteredPlayerData data = new EnteredPlayerData(
                 player.getUuidAsString(),
                 player.getX(), player.getY(), player.getZ(),
                 player.getPitch(), player.getYaw(),
                 this.getPos()
         );
-
-        // Add to entered players list
         enteredPlayers.add(data);
-
-        // Register the suitcase position
         Map<String, BlockPos> suitcases = SUITCASE_REGISTRY.computeIfAbsent(
                 boundKeystoneName, k -> new HashMap<>()
         );
         suitcases.put(player.getUuidAsString(), this.getPos());
-
-        // Store player's position in PocketPortalBlock for fallback
         PocketPortalBlock.storePlayerPosition(player);
-
         markDirty();
     }
 
     public EnteredPlayerData getExitPosition(String playerUuid) {
         for (EnteredPlayerData data : enteredPlayers) {
             if (data.uuid.equals(playerUuid)) {
+                EnteredPlayerData exitData = new EnteredPlayerData(
+                        data.uuid,
+                        this.getPos().getX() + 0.5,
+                        this.getPos().getY() + 1.0,
+                        this.getPos().getZ() + 0.5,
+                        data.pitch, data.yaw,
+                        this.getPos()
+                );
                 enteredPlayers.remove(data);
                 markDirty();
-                return data;
+                return exitData;
             }
         }
         return null;
@@ -181,8 +166,7 @@ public class SuitcaseBlockEntity extends BlockEntity {
             boundKeystoneName = nbt.getString("BoundKeystone");
         }
         isLocked = nbt.getBoolean("Locked");
-        dimensionLocked = nbt.contains("DimensionLocked") ? nbt.getBoolean("DimensionLocked") : true;
-
+        dimensionLocked = !nbt.contains("DimensionLocked") || nbt.getBoolean("DimensionLocked");
         enteredPlayers.clear();
         if (nbt.contains("EnteredPlayers", NbtElement.LIST_TYPE)) {
             NbtList playersList = nbt.getList("EnteredPlayers", NbtElement.COMPOUND_TYPE);
@@ -205,11 +189,8 @@ public class SuitcaseBlockEntity extends BlockEntity {
         return nbt;
     }
 
-//    static final Map<String, Map<String, BlockPos>> SUITCASE_REGISTRY = new HashMap<>();
-
     public static final Map<String, Map<String, BlockPos>> SUITCASE_REGISTRY = Collections.synchronizedMap(new HashMap<>());
 
-    // Find a suitcase position
     public static BlockPos findSuitcasePosition(String keystoneName, String playerUuid) {
         Map<String, BlockPos> suitcases = SUITCASE_REGISTRY.get(keystoneName);
         if (suitcases != null) {
@@ -218,7 +199,6 @@ public class SuitcaseBlockEntity extends BlockEntity {
         return null;
     }
 
-    // Clean up method
     public static void removeSuitcaseEntry(String keystoneName, String playerUuid) {
         Map<String, BlockPos> suitcases = SUITCASE_REGISTRY.get(keystoneName);
         if (suitcases != null) {
@@ -229,20 +209,9 @@ public class SuitcaseBlockEntity extends BlockEntity {
         }
     }
 
-    public static void cleanupPlayerData(String playerUuid) {
-        // Clean up all registry entries for this player
-        for (Map<String, BlockPos> dimensionMap : SUITCASE_REGISTRY.values()) {
-            dimensionMap.remove(playerUuid);
-        }
-
-        // Remove empty maps
-        SUITCASE_REGISTRY.entrySet().removeIf(entry -> entry.getValue().isEmpty());
-    }
-
     public List<EnteredPlayerData> getEnteredPlayers() {
         return enteredPlayers;
     }
-
 
     public static void initializeSuitcaseRegistry(Map<String, Map<String, BlockPos>> savedRegistry) {
         SUITCASE_REGISTRY.clear();
@@ -261,33 +230,25 @@ public class SuitcaseBlockEntity extends BlockEntity {
     }
 
     public void updatePlayerSuitcasePosition(String playerUuid, BlockPos newPos) {
-        // First, update the entered players list
         for (int i = 0; i < enteredPlayers.size(); i++) {
             EnteredPlayerData data = enteredPlayers.get(i);
             if (data.uuid.equals(playerUuid)) {
-                // Create a new data object with the updated suitcase position
-                // BUT keep the original exit coordinates
                 EnteredPlayerData updatedData = new EnteredPlayerData(
                         data.uuid,
                         data.x, data.y, data.z,
                         data.pitch, data.yaw,
                         newPos
                 );
-
-                // Replace the old data with the updated version
                 enteredPlayers.set(i, updatedData);
                 break;
             }
         }
-
-        // Then, also update the registry to ensure consistency
         if (boundKeystoneName != null) {
             Map<String, BlockPos> suitcases = SUITCASE_REGISTRY.computeIfAbsent(
                     boundKeystoneName, k -> new HashMap<>()
             );
             suitcases.put(playerUuid, newPos);
         }
-
         markDirty();
     }
 }

@@ -50,14 +50,12 @@ public class ModBlocks {
     public static final Block PINK_SUITCASE = registerBlock("pink_suitcase",
             new SuitcaseBlock(FabricBlockSettings.copyOf(Blocks.PINK_WOOL).sounds(BlockSoundGroup.WOOL).strength(0.2f).nonOpaque().luminance(state -> state.get(SuitcaseBlock.OPEN) ? 8 : 0)));
 
-
     public static final Block PORTAL = registerBlock("portal",
             new PocketPortalBlock(FabricBlockSettings.copyOf(Blocks.NETHER_PORTAL)
                     .sounds(BlockSoundGroup.LODESTONE)
                     .nonOpaque()
                     .luminance(10)
                     .strength(-1f)));
-
 
     private static Block registerBlock(String name, Block block) {
         registerBlockItem(name, block);

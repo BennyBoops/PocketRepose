@@ -5,7 +5,6 @@ import net.bennyboops.modid.item.KeystoneItem;
 import net.minecraft.block.*;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.entity.Entity;
-import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemPlacementContext;
@@ -41,7 +40,6 @@ import java.util.List;
 import java.util.Map;
 
 public class SuitcaseBlock extends BlockWithEntity {
-
     public static final BooleanProperty OPEN = BooleanProperty.of("open");
     public static final DirectionProperty FACING = Properties.HORIZONTAL_FACING;
     public static final EnumProperty<DyeColor> COLOR = EnumProperty.of("color", DyeColor.class);
@@ -55,9 +53,8 @@ public class SuitcaseBlock extends BlockWithEntity {
         setDefaultState(getDefaultState()
                 .with(OPEN, false)
                 .with(FACING, Direction.NORTH)
-                .with(COLOR, DyeColor.BROWN)); // Default color
+                .with(COLOR, DyeColor.BROWN));
     }
-    private static final Map<String, Map<String, BlockPos>> SUITCASE_REGISTRY = new HashMap<>();
 
     @Override
     public void onPlaced(World world, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack itemStack) {
@@ -65,20 +62,18 @@ public class SuitcaseBlock extends BlockWithEntity {
         if (!world.isClient) {
             BlockEntity blockEntity = world.getBlockEntity(pos);
             if (blockEntity instanceof SuitcaseBlockEntity suitcase) {
-                // Transfer any existing NBT data from item to block entity
                 NbtCompound blockEntityTag = itemStack.getSubNbt("BlockEntityTag");
                 if (blockEntityTag != null) {
                     suitcase.readNbt(blockEntityTag);
-
-                    // IMPORTANT: Register this new suitcase in the registry for any stored players
                     String keystoneName = suitcase.getBoundKeystoneName();
                     if (keystoneName != null) {
                         List<SuitcaseBlockEntity.EnteredPlayerData> players = suitcase.getEnteredPlayers();
-
-                        // Update registry and player data positions for all entered players
                         for (SuitcaseBlockEntity.EnteredPlayerData player : players) {
-                            // Update the stored position in the player data
                             suitcase.updatePlayerSuitcasePosition(player.uuid, pos);
+                            Map<String, BlockPos> suitcases = SuitcaseBlockEntity.SUITCASE_REGISTRY.computeIfAbsent(
+                                    keystoneName, k -> new HashMap<>()
+                            );
+                            suitcases.put(player.uuid, pos);
                         }
                     }
                 }
@@ -98,20 +93,14 @@ public class SuitcaseBlock extends BlockWithEntity {
                     beNbt.putString("BoundKeystone", boundKeystone);
                     beNbt.putBoolean("Locked", suitcase.isLocked());
                     beNbt.putBoolean("DimensionLocked", suitcase.isDimensionLocked());
-
-                    // Transfer entered players data to the item
                     NbtList playersList = new NbtList();
                     for (SuitcaseBlockEntity.EnteredPlayerData data : suitcase.getEnteredPlayers()) {
                         playersList.add(data.toNbt());
                     }
                     beNbt.put("EnteredPlayers", playersList);
-
-                    // Add lore NBT for tooltip
                     NbtCompound display = new NbtCompound();
                     NbtList lore = new NbtList();
                     String displayName = boundKeystone.replace("_", " ");
-
-                    // Create the lore text components
                     Text boundText;
                     if (suitcase.isLocked()) {
                         boundText = Text.literal("Bound to: §k" + displayName)
@@ -120,63 +109,47 @@ public class SuitcaseBlock extends BlockWithEntity {
                         boundText = Text.literal("Bound to: " + displayName)
                                 .formatted(Formatting.GRAY);
                     }
-
                     Text lockText = Text.literal(suitcase.isLocked() ? "§cLocked" : "§aUnlocked")
                             .formatted(Formatting.GRAY);
-
-                    // Add warning if players are inside
                     if (!suitcase.getEnteredPlayers().isEmpty()) {
                         Text warningText = Text.literal("§c⚠ Contains " + suitcase.getEnteredPlayers().size() + " Traveler's!")
                                 .formatted(Formatting.RED);
                         lore.add(NbtString.of(Text.Serializer.toJson(warningText)));
                     }
-
                     lore.add(NbtString.of(Text.Serializer.toJson(boundText)));
                     lore.add(NbtString.of(Text.Serializer.toJson(lockText)));
                     display.put("Lore", lore);
-
                     itemStack.setSubNbt("display", display);
                     itemStack.setSubNbt("BlockEntityTag", beNbt);
                 }
 
                 ItemScatterer.spawn(world, pos.getX(), pos.getY(), pos.getZ(), itemStack);
             }
-
             world.removeBlockEntity(pos);
         }
     }
 
-    // Block interaction methods
     @Override
     public ActionResult onUse(BlockState state, World world, BlockPos pos, PlayerEntity player, Hand hand, BlockHitResult hit) {
         if (world.isClient) {
             return ActionResult.SUCCESS;
         }
-
         ItemStack heldItem = player.getStackInHand(hand);
         BlockEntity blockEntity = world.getBlockEntity(pos);
-
         if (!(blockEntity instanceof SuitcaseBlockEntity suitcase)) {
             return ActionResult.PASS;
         }
-
         if (!suitcase.canOpenInDimension(world)) {
             world.playSound(null, pos, SoundEvents.BLOCK_IRON_DOOR_CLOSE,
                     SoundCategory.BLOCKS, 0.3F, 2.0F);
             player.sendMessage(Text.literal("§c☒"), true);
             return ActionResult.SUCCESS;
         }
-
-
-
-
-
         String boundKeystone = suitcase.getBoundKeystoneName();
 
         // Handle keystone interactions
         if (heldItem.getItem() instanceof KeystoneItem) {
             String keystoneName = heldItem.getName().getString().toLowerCase();
-
             // Handle locking with keystone
             if (boundKeystone != null && boundKeystone.equals(keystoneName)) {
                 boolean newLockState = !suitcase.isLocked();
@@ -187,7 +160,6 @@ public class SuitcaseBlock extends BlockWithEntity {
                 player.sendMessage(Text.literal(newLockState ? "§7☒" : "§7☐"), true);
                 return ActionResult.SUCCESS;
             }
-
             // Prevent binding if suitcase is locked
             if (suitcase.isLocked()) {
                 world.playSound(null, pos, SoundEvents.BLOCK_IRON_DOOR_CLOSE,
@@ -195,24 +167,19 @@ public class SuitcaseBlock extends BlockWithEntity {
                 player.sendMessage(Text.literal("§c☒"), true);
                 return ActionResult.FAIL;
             }
-
             // Binding logic
             if (keystoneName.equals("item.pocket-repose.keystone")) {
                 player.sendMessage(Text.literal("§cName the key to bind."), false);
                 return ActionResult.FAIL;
             }
-
             if (!KeystoneItem.isValidKeystone(heldItem)) {
                 return ActionResult.FAIL;
             }
-
             suitcase.bindKeystone(keystoneName);
             world.playSound(null, pos, SoundEvents.ITEM_LODESTONE_COMPASS_LOCK,
                     SoundCategory.BLOCKS, 2.0F, 0.0F);
-
             return ActionResult.SUCCESS;
         }
-
         // Handle opening/closing
         if (!player.isSneaking() || heldItem.isEmpty()) {
             if (boundKeystone == null) {
@@ -220,16 +187,13 @@ public class SuitcaseBlock extends BlockWithEntity {
                         SoundCategory.BLOCKS, 0.5F, 2.0F);
                 return ActionResult.FAIL;
             }
-
             if (suitcase.isLocked()) {
                 world.playSound(null, pos, SoundEvents.BLOCK_IRON_DOOR_CLOSE,
                         SoundCategory.BLOCKS, 0.3F, 2.0F);
                 return ActionResult.FAIL;
             }
-
             boolean isOpen = state.get(OPEN);
             world.setBlockState(pos, state.with(OPEN, !isOpen));
-
             if (!isOpen) {
                 world.playSound(null, pos, SoundEvents.BLOCK_LADDER_STEP,
                         SoundCategory.BLOCKS, 0.3F, 0.0F);
@@ -241,10 +205,8 @@ public class SuitcaseBlock extends BlockWithEntity {
                 world.playSound(null, pos, SoundEvents.BLOCK_BAMBOO_WOOD_TRAPDOOR_CLOSE,
                         SoundCategory.BLOCKS, 0.3F, 0.0F);
             }
-
             return ActionResult.SUCCESS;
         }
-
         return ActionResult.PASS;
     }
 
@@ -255,37 +217,25 @@ public class SuitcaseBlock extends BlockWithEntity {
             if (!state.get(OPEN) || !player.isSneaking()) {
                 return;
             }
-
             BlockEntity blockEntity = world.getBlockEntity(pos);
             if (!(blockEntity instanceof SuitcaseBlockEntity suitcase)) {
                 return;
             }
-
             String keystoneName = suitcase.getBoundKeystoneName();
             if (keystoneName == null) {
                 return;
             }
-
-            // Create dimension ID for the pocket dimension
             String dimensionName = "pocket_dimension_" + keystoneName;
             Identifier dimensionId = new Identifier("pocket-repose", dimensionName);
             RegistryKey<World> dimensionKey = RegistryKey.of(RegistryKeys.WORLD, dimensionId);
-
             ServerWorld targetWorld = world.getServer().getWorld(dimensionKey);
             if (targetWorld != null) {
-                // Store the player's entry point before teleporting
                 suitcase.playerEntered(player);
-
-                // Prepare player for teleport
                 player.stopRiding();
                 player.velocityModified = true;
                 player.setVelocity(Vec3d.ZERO);
                 player.fallDistance = 0f;
-
-                // Request initial position update
                 player.requestTeleport(2.5, 66, 5.5);
-
-                // Execute teleport on next tick
                 world.getServer().execute(() -> {
                     player.teleport(
                             targetWorld,
@@ -295,7 +245,6 @@ public class SuitcaseBlock extends BlockWithEntity {
                             0.0f,
                             player.getPitch()
                     );
-
                     world.playSound(null, pos,
                             SoundEvents.ITEM_BUNDLE_DROP_CONTENTS,
                             SoundCategory.PLAYERS, 2.0f, 1.0f);
@@ -304,9 +253,6 @@ public class SuitcaseBlock extends BlockWithEntity {
         }
     }
 
-
-
-    // Block state and shape methods
     @Override
     public BlockRenderType getRenderType(BlockState state) {
         return BlockRenderType.MODEL;
@@ -346,7 +292,6 @@ public class SuitcaseBlock extends BlockWithEntity {
         builder.add(COLOR);
     }
 
-    // Block entity methods
     @Nullable
     @Override
     public BlockEntity createBlockEntity(BlockPos pos, BlockState state) {
@@ -364,12 +309,10 @@ public class SuitcaseBlock extends BlockWithEntity {
                 beNbt.putString("BoundKeystone", boundKeystone);
                 beNbt.putBoolean("Locked", suitcase.isLocked());
 
-                // Add color NBT
                 DyeColor color = state.get(COLOR);
                 NbtCompound nbt = stack.getOrCreateNbt();
                 nbt.putString("Color", color.getName());
 
-                // Add display NBT
                 NbtCompound display = new NbtCompound();
                 NbtList lore = new NbtList();
                 String displayName = boundKeystone.replace("_", " ");
@@ -382,10 +325,8 @@ public class SuitcaseBlock extends BlockWithEntity {
                     boundText = Text.literal("Bound to: " + displayName)
                             .formatted(Formatting.GRAY);
                 }
-
                 Text lockText = Text.literal(suitcase.isLocked() ? "§cLocked" : "§aUnlocked")
                         .formatted(Formatting.GRAY);
-
                 lore.add(NbtString.of(Text.Serializer.toJson(boundText)));
                 lore.add(NbtString.of(Text.Serializer.toJson(lockText)));
                 display.put("Lore", lore);
@@ -412,5 +353,4 @@ public class SuitcaseBlock extends BlockWithEntity {
         BlockEntity blockEntity = world.getBlockEntity(pos);
         return blockEntity != null && blockEntity.onSyncedBlockEvent(type, data);
     }
-
 }

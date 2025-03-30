@@ -81,31 +81,6 @@ public class SuitcaseRegistryState extends PersistentState {
         return state;
     }
 
-    public void addSuitcaseEntry(String keystoneName, String playerUuid, BlockPos pos) {
-        Map<String, BlockPos> players = registry.computeIfAbsent(keystoneName, k -> new HashMap<>());
-        players.put(playerUuid, pos);
-        this.markDirty();
-    }
-
-    public BlockPos getSuitcasePosition(String keystoneName, String playerUuid) {
-        Map<String, BlockPos> players = registry.get(keystoneName);
-        if (players != null) {
-            return players.get(playerUuid);
-        }
-        return null;
-    }
-
-    public void removeSuitcaseEntry(String keystoneName, String playerUuid) {
-        Map<String, BlockPos> players = registry.get(keystoneName);
-        if (players != null) {
-            players.remove(playerUuid);
-            if (players.isEmpty()) {
-                registry.remove(keystoneName);
-            }
-            this.markDirty();
-        }
-    }
-
     // Static methods to manage the global instance
     private static SuitcaseRegistryState getState(MinecraftServer server) {
         // Get or create the state from the overworld

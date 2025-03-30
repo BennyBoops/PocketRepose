@@ -33,6 +33,7 @@ public class ModItemGroups {
                         entries.add(ModBlocks.CYAN_SUITCASE);
                         entries.add(ModBlocks.LIGHT_BLUE_SUITCASE);
                         entries.add(ModBlocks.BLUE_SUITCASE);
+                        entries.add(ModBlocks.MAGENTA_SUITCASE);
                         entries.add(ModBlocks.PURPLE_SUITCASE);
                         entries.add(ModBlocks.PINK_SUITCASE);
 
