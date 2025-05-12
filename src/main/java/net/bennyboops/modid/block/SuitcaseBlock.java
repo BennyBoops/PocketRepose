@@ -149,7 +149,7 @@ public class SuitcaseBlock extends BlockWithEntity {
 
         // Handle keystone interactions
         if (heldItem.getItem() instanceof KeystoneItem) {
-            String keystoneName = heldItem.getName().getString().toLowerCase();
+            String keystoneName = heldItem.getName().getString().toLowerCase().replaceAll("[^a-z0-9_]", "");
             // Handle locking with keystone
             if (boundKeystone != null && boundKeystone.equals(keystoneName)) {
                 boolean newLockState = !suitcase.isLocked();

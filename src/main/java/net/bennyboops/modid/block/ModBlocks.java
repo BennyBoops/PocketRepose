@@ -3,6 +3,7 @@ package net.bennyboops.modid.block;
 import net.bennyboops.modid.PocketRepose;
 import net.fabricmc.fabric.api.item.v1.FabricItemSettings;
 import net.fabricmc.fabric.api.object.builder.v1.block.FabricBlockSettings;
+import net.minecraft.block.AbstractBlock;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.item.BlockItem;
@@ -10,6 +11,7 @@ import net.minecraft.item.Item;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
 import net.minecraft.sound.BlockSoundGroup;
+import net.minecraft.sound.SoundEvents;
 import net.minecraft.util.Identifier;
 
 public class ModBlocks {
@@ -50,20 +52,32 @@ public class ModBlocks {
     public static final Block PINK_SUITCASE = registerBlock("pink_suitcase",
             new SuitcaseBlock(FabricBlockSettings.copyOf(Blocks.PINK_WOOL).sounds(BlockSoundGroup.WOOL).strength(0.2f).nonOpaque().luminance(state -> state.get(SuitcaseBlock.OPEN) ? 8 : 0)));
 
+    public static final Block SECRET_BARREL = registerBlock("secret_barrel",
+            new CustomSuitcaseBlock(
+                    FabricBlockSettings.copyOf(Blocks.BARREL)
+                            .sounds(BlockSoundGroup.WOOD)
+                            .strength(1.0f)
+                            .nonOpaque(),
+                    Block.createCuboidShape(0, 0, 0, 16, 15, 16),
+                    SoundEvents.BLOCK_BARREL_OPEN,
+                    SoundEvents.BLOCK_BARREL_CLOSE
+            )
+    );
+
     public static final Block PORTAL = registerBlock("portal",
             new PocketPortalBlock(FabricBlockSettings.copyOf(Blocks.NETHER_PORTAL)
                     .sounds(BlockSoundGroup.LODESTONE)
                     .nonOpaque()
-                    .luminance(10)
+                    .luminance(state -> 10)
                     .strength(-1f)));
 
     private static Block registerBlock(String name, Block block) {
         registerBlockItem(name, block);
-        return Registry.register(Registries.BLOCK, new Identifier(PocketRepose.MOD_ID, name), block);
+        return Registry.register(Registries.BLOCK, Identifier.of(PocketRepose.MOD_ID, name), block);
 
     }
     private static Item registerBlockItem(String name, Block block) {
-        return Registry.register(Registries.ITEM, new Identifier(PocketRepose.MOD_ID, name),
+        return Registry.register(Registries.ITEM, Identifier.of(PocketRepose.MOD_ID, name),
                 new BlockItem(block, new FabricItemSettings()));
     }
     public static void registerModBlocks() {

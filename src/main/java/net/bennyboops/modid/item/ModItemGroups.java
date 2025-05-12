@@ -36,6 +36,8 @@ public class ModItemGroups {
                         entries.add(ModBlocks.PURPLE_SUITCASE);
                         entries.add(ModBlocks.PINK_SUITCASE);
 
+                        entries.add(ModBlocks.SECRET_BARREL);
+
                         entries.add(ModBlocks.PORTAL);
 
                         entries.add(Blocks.ANVIL);
