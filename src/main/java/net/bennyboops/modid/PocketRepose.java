@@ -31,9 +31,7 @@ public class PocketRepose implements ModInitializer {
 		ModBlocks.registerModBlocks();
 		ModItemGroups.registerItemGroups();
 		ModBlockEntities.registerBlockEntities();
-
-		SuitcaseRegistryState.registerEvents();
-
+		
 		ServerWorldEvents.LOAD.register((server, world) -> {
 			if (world.getRegistryKey().getValue().getNamespace().equals("pocket-repose")) {
 				String dimensionName = world.getRegistryKey().getValue().getPath();
