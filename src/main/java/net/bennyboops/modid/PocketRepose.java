@@ -20,6 +20,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 public class PocketRepose implements ModInitializer {
+
 	public static final String MOD_ID = "pocket-repose";
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
 
