@@ -4,6 +4,94 @@ plugins {
 }
 
 version = project.mod_version
+group   = project.maven_group
+
+base {
+	archivesName = project.archives_base_name
+}
+
+repositories {
+	maven { url = 'https://maven.nucleoid.xyz/' }
+	maven { url = 'https://repo.spongepowered.org/maven' }
+}
+
+fabricApi {
+	configureDataGeneration()
+}
+
+configurations {
+
+}
+
+dependencies {
+	// Minecraft, mappings, loader, API
+	minecraft    "com.mojang:minecraft:${project.minecraft_version}"
+	mappings      "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+	// Fabric Loader for compile
+	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+
+	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+	annotationProcessor 'net.fabricmc:fabric-loom:1.8-SNAPSHOT'
+
+	modImplementation include('xyz.nucleoid:fantasy:0.4.11+1.20-rc1')
+}
+
+processResources {
+	inputs.property "version", project.version
+
+	filesMatching("fabric.mod.json") {
+		expand "version": project.version
+	}
+}
+
+tasks.withType(JavaCompile).configureEach {
+	it.options.release = 17
+}
+
+java {
+	withSourcesJar()
+	sourceCompatibility = JavaVersion.VERSION_17
+	targetCompatibility = JavaVersion.VERSION_17
+}
+
+jar {
+	from("LICENSE") {
+		rename { "${it}_${project.base.archivesName.get()}" }
+	}
+}
+
+// Publishing configuration remains unchanged
+publishing {
+	publications {
+		create("mavenJava", MavenPublication) {
+			artifactId = project.archives_base_name
+			from components.java
+		}
+	}
+
+	repositories {
+		// add publishing repos here
+	}
+}
+
+
+
+
+
+
+
+
+
+/**
+
+plugins {
+	id 'fabric-loom' version '1.8-SNAPSHOT'
+	id 'maven-publish'
+	id 'com.github.johnrengelman.shadow' version '7.1.2'
+}
+
+version = project.mod_version
 group = project.maven_group
 
 base {
@@ -34,6 +122,7 @@ dependencies {
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
 	modImplementation 'xyz.nucleoid:fantasy:0.4.11+1.20-rc1'
+
 }
 
 processResources {
@@ -81,3 +170,11 @@ publishing {
 		// retrieving dependencies.
 	}
 }
+
+shadowJar {
+	manifest {
+		attributes('Main-Class': 'net.bennyboops.modid.PocketRepose')
+	}
+}
+
+ **/

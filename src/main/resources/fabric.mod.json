@@ -20,9 +20,6 @@
 		],
 		"client": [
 			"net.bennyboops.modid.PocketReposeClient"
-		],
-		"fabric-datagen": [
-			"net.bennyboops.modid.PocketReposeDataGenerator"
 		]
 	},
 	"mixins": [
