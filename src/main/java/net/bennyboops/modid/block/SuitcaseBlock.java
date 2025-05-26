@@ -1,5 +1,6 @@
 package net.bennyboops.modid.block;
 
+import net.bennyboops.modid.PocketRepose;
 import net.bennyboops.modid.block.entity.SuitcaseBlockEntity;
 import net.bennyboops.modid.item.KeystoneItem;
 import net.minecraft.block.*;
@@ -230,7 +231,16 @@ public class SuitcaseBlock extends BlockWithEntity {
             RegistryKey<World> dimensionKey = RegistryKey.of(RegistryKeys.WORLD, dimensionId);
             ServerWorld targetWorld = world.getServer().getWorld(dimensionKey);
             if (targetWorld != null) {
+
+                boolean wasFirstTime = suitcase.isFirstTimeEntering(player);
+
                 suitcase.playerEntered(player);
+
+                // Trigger achievement if it was their first time
+                if (wasFirstTime) {
+                    PocketRepose.ENTER_POCKET_DIMENSION.trigger(player);
+                }
+
                 player.stopRiding();
                 player.velocityModified = true;
                 player.setVelocity(Vec3d.ZERO);

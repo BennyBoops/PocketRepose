@@ -1,0 +1,28 @@
+{
+  "parent": "minecraft:adventure/root",
+  "display": {
+    "icon": {
+      "item": "pocket-repose:suitcase"
+    },
+    "title": {
+      "text": "Smaller on the Outside"
+    },
+    "description": {
+      "text": "Enter a pocket dimension."
+    },
+    "frame": "task",
+    "show_toast": true,
+    "announce_to_chat": true,
+    "hidden": false
+  },
+  "criteria": {
+    "enter_pocket_dimension": {
+      "trigger": "pocket-repose:enter_pocket_dimension"
+    }
+  },
+  "requirements": [
+    [
+      "enter_pocket_dimension"
+    ]
+  ]
+}

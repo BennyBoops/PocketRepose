@@ -3,12 +3,14 @@ package net.bennyboops.modid;
 import net.bennyboops.modid.block.ModBlocks;
 import net.bennyboops.modid.block.PocketPortalBlock;
 import net.bennyboops.modid.block.entity.ModBlockEntities;
+import net.bennyboops.modid.criterion.EnterPocketDimensionCriterion;
 import net.bennyboops.modid.item.ModItemGroups;
 import net.bennyboops.modid.item.ModItems;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
+import net.minecraft.advancement.criterion.Criteria;
 import net.minecraft.block.Block;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
@@ -40,9 +42,13 @@ public class PocketRepose implements ModInitializer {
 			RegistryKey.of(RegistryKeys.DIMENSION_TYPE, POCKET_DIMENSION_TYPE_ID);
 	public static final String MOD_ID = "pocket-repose";
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+	public static final EnterPocketDimensionCriterion ENTER_POCKET_DIMENSION = new EnterPocketDimensionCriterion();
+
 
 	@Override
 	public void onInitialize() {
+
+		Criteria.register(ENTER_POCKET_DIMENSION);
 
 		ModItems.registerModItems();
 		ModBlocks.registerModBlocks();
