@@ -4,6 +4,7 @@
 	"package": "net.bennyboops.modid.mixin",
 	"compatibilityLevel": "JAVA_17",
 	"mixins": [
+		"AnvilScreenHandlerMixin",
 		"ExampleMixin"
 	],
 	"injectors": {
