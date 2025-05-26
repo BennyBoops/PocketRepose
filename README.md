@@ -15,5 +15,3 @@ HELLO FRIENDS!
 ## Work In Progress
 
 - **Mob Entry:** Right-click on mobs to store in your suitcase.
-- **Safety Features:** Ensure players cant get softlocked within the suitcase.
-- **New Models:** New suitcase models such as barrels, hatches, etc.
