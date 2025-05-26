@@ -1,6 +1,8 @@
 package net.bennyboops.modid.item;
 
 import net.bennyboops.modid.PocketRepose;
+import net.bennyboops.modid.world.PortalChunkGenerator;
+import net.minecraft.block.Block;
 import net.minecraft.client.item.TooltipContext;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.Entity;
@@ -8,22 +10,36 @@ import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.registry.*;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
+import net.minecraft.structure.StructurePlacementData;
+import net.minecraft.structure.StructureTemplate;
 import net.minecraft.text.Text;
 import net.minecraft.util.*;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
+import net.minecraft.world.biome.Biome;
+import net.minecraft.world.dimension.DimensionType;
+
+import net.minecraft.world.gen.chunk.*;
 import org.jetbrains.annotations.Nullable;
+
+import xyz.nucleoid.fantasy.Fantasy;
+import xyz.nucleoid.fantasy.RuntimeWorldConfig;
+import xyz.nucleoid.fantasy.RuntimeWorldHandle;
+import xyz.nucleoid.fantasy.util.VoidChunkGenerator;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
+import java.util.*;
 
 public class KeystoneItem extends Item {
+
+    private static final Identifier POCKET_DIMENSION_TYPE_ID = new Identifier("pocket-repose", "pocket_dimension_type");
 
     public KeystoneItem(Settings settings) {
         super(settings);
@@ -44,7 +60,10 @@ public class KeystoneItem extends Item {
             return TypedActionResult.pass(stack);
         }
         String dimensionName = "pocket_dimension_" + keystoneName.replaceAll("[^a-z0-9_]", "");
-        createDimension(world.getServer(), dimensionName);
+
+        createOrLoadPersistentDimension(world.getServer(), dimensionName);
+
+        // Mark keystone as bound
         for (int i = 0; i < 20; i++) {
             stack.addEnchantment(Enchantments.BINDING_CURSE, 1);
         }
@@ -57,6 +76,91 @@ public class KeystoneItem extends Item {
         return TypedActionResult.success(stack);
     }
 
+    private void createOrLoadPersistentDimension(MinecraftServer server, String dimensionName) {
+        // 1) the world‐ID (where files will live)
+        Identifier worldId = new Identifier("pocket-repose", dimensionName);
+
+        // 2) Check if dimension already exists by checking if world files exist
+        Path worldSavePath = server.getSavePath(WorldSavePath.ROOT)
+                .resolve("dimensions")
+                .resolve("pocket-repose")
+                .resolve(dimensionName);
+        boolean dimensionExists = Files.exists(worldSavePath);
+
+        // 3) the registry‐key for already registered DimensionType
+        RegistryKey<DimensionType> typeKey = RegistryKey.of(RegistryKeys.DIMENSION_TYPE, POCKET_DIMENSION_TYPE_ID);
+
+        // 4) Create void generator using Fantasy's VoidChunkGenerator
+        Registry<Biome> biomeRegistry = server.getRegistryManager().get(RegistryKeys.BIOME);
+        RegistryKey<Biome> pocketIslandsBiome = RegistryKey.of(RegistryKeys.BIOME, new Identifier("pocket-repose", "pocket_islands"));
+
+        // Create the void chunk generator using Fantasy's constructor
+        ChunkGenerator generator = new PortalChunkGenerator(biomeRegistry, pocketIslandsBiome);
+
+        long seed = server.getOverworld().getSeed();
+
+        // 5) build a persistent world config using the key, not the raw object
+        RuntimeWorldConfig config = new RuntimeWorldConfig()
+                .setDimensionType(typeKey)
+                .setGenerator(generator)
+                .setSeed(seed);
+
+        // 6) Load or create dimension
+        RuntimeWorldHandle handle = Fantasy.get(server)
+                .getOrOpenPersistentWorld(worldId, config);
+
+        registerDimension(server, dimensionName);
+
+        // 7) Only place structure if this is a truly new dimension
+        if (!dimensionExists) {
+            ServerWorld world = handle.asWorld();
+            placeStructureImmediately(server, world, dimensionName);
+            System.out.println("Created new dimension with structure: " + dimensionName);
+        } else {
+            System.out.println("Loaded existing dimension: " + dimensionName);
+        }
+    }
+
+    private void placeStructureImmediately(MinecraftServer server, ServerWorld world, String dimensionName) {
+        try {
+            StructureTemplate template = server.getStructureTemplateManager()
+                    .getTemplate(new Identifier("pocket-repose", "pocket_island_01"))
+                    .orElse(null);
+
+            if (template != null) {
+                BlockPos pos = new BlockPos(0, 64, 0);
+
+                world.getChunk(pos);
+
+                template.place(
+                        world,
+                        pos,
+                        pos,
+                        new StructurePlacementData()
+                                .setMirror(BlockMirror.NONE)
+                                .setRotation(BlockRotation.NONE)
+                                .setIgnoreEntities(false),
+                        world.getRandom(),
+                        Block.NOTIFY_LISTENERS
+                );
+
+                System.out.println("Immediately placed pocket island structure in new dimension: " + dimensionName);
+            } else {
+                System.err.println("Could not find structure template: pocket_island_01");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    private Path getStructureMarkerPath(MinecraftServer server, String dimensionName) {
+        return server.getSavePath(WorldSavePath.ROOT)
+                .resolve("data")
+                .resolve("pocket-repose")
+                .resolve("pending_structures")
+                .resolve(dimensionName + ".txt");
+    }
+
     public static boolean isValidKeystone(ItemStack stack) {
         String keystoneName = stack.getName().getString().toLowerCase();
         return stack.hasCustomName() &&
@@ -65,7 +169,7 @@ public class KeystoneItem extends Item {
     }
 
     @Override
-    public void appendTooltip(ItemStack stack, @Nullable World world, List<Text> tooltip, TooltipContext context) {
+    public void appendTooltip(ItemStack stack, @Nullable World world, java.util.List<Text> tooltip, TooltipContext context) {
         if (!stack.hasCustomName() ||
                 stack.getName().getString().toLowerCase().equals("item.pocket-repose.keystone")) {
             tooltip.add(Text.literal("§7Rename to bind").formatted(Formatting.ITALIC));
@@ -81,85 +185,37 @@ public class KeystoneItem extends Item {
         } else if (stack.getNbt() != null && stack.getNbt().contains("CustomModelData")) {
             stack.getNbt().remove("CustomModelData");
         }
-    }
 
-    private boolean createDimension(MinecraftServer server, String dimensionName) {
-        try {
-            Path datapackPath = server.getSavePath(WorldSavePath.DATAPACKS)
-                    .resolve("pocket-repose");
-            Path dimensionPath = datapackPath
-                    .resolve("data")
-                    .resolve("pocket-repose")
-                    .resolve("dimension");
-            Files.createDirectories(dimensionPath);
-            createPackMcmeta(datapackPath);
-            Path dimensionFile = dimensionPath.resolve(dimensionName + ".json");
-            boolean dimensionExists = Files.exists(dimensionFile);
-            boolean isDimensionRegistered = server.getWorldRegistryKeys().stream()
-                    .anyMatch(key -> key.getValue().toString().equals("pocket-repose:" + dimensionName));
-            Path dimensionRegistryPath = server.getSavePath(WorldSavePath.ROOT)
-                    .resolve("data")
-                    .resolve("pocket-repose")
-                    .resolve("dimension_registry");
-            Files.createDirectories(dimensionRegistryPath);
-            Path dimensionRegistryFile = dimensionRegistryPath.resolve("registry.txt");
-            Set<String> registeredDimensions = new HashSet<>();
-            if (Files.exists(dimensionRegistryFile)) {
-                registeredDimensions = new HashSet<>(Files.readAllLines(dimensionRegistryFile));
+        if (!world.isClient && stack.hasEnchantments()) {
+            NbtCompound nbt = stack.getOrCreateNbt();
+            if (nbt.getInt("RepairCost") < 32767) {
+                nbt.putInt("RepairCost", 32767);
             }
-            boolean isDimensionInRegistry = registeredDimensions.contains(dimensionName);
-            if (!dimensionExists) {
-                String dimensionJson = """
-                    {
-                        "type": "pocket-repose:pocket_dimension_type",
-                        "generator": {
-                            "type": "minecraft:flat",
-                            "settings": {
-                                "biome": "pocket-repose:pocket_islands",
-                                "layers": [
-                                    {
-                                        "block": "pocket-repose:portal",
-                                        "height": 1
-                                    }
-                                ]
-                            }
-                        }
-                    }
-                    """;
-                Files.writeString(dimensionFile, dimensionJson);
-                if (!isDimensionInRegistry) {
-                    registeredDimensions.add(dimensionName);
-                    Files.write(dimensionRegistryFile, registeredDimensions);
-                }
-            }
-            if (!isDimensionInRegistry && !isDimensionRegistered) {
-                Path structureMarkerPath = server.getSavePath(WorldSavePath.ROOT)
-                        .resolve("data")
-                        .resolve("pocket-repose")
-                        .resolve("pending_structures");
-                Files.createDirectories(structureMarkerPath);
-                Files.writeString(structureMarkerPath.resolve(dimensionName + ".txt"), "pending");
-                return true;
-            }
-            return false;
-        } catch (IOException e) {
-            PocketRepose.LOGGER.error("Failed to create dimension: " + dimensionName, e);
-            return false;
         }
     }
 
-    private void createPackMcmeta(Path datapackPath) throws IOException {
-        Path packMcmeta = datapackPath.resolve("pack.mcmeta");
-        if (!Files.exists(packMcmeta)) {
-            String content = """
-                    {
-                        "pack": {
-                            "pack_format": 15,
-                            "description": "pocket-repose Dimensions"
-                        }
-                    }
-                    """;
-            Files.writeString(packMcmeta, content);
+    private void registerDimension(MinecraftServer server, String dimensionName) {
+        Path registryDir = server.getSavePath(WorldSavePath.ROOT)
+                .resolve("data")
+                .resolve("pocket-repose")
+                .resolve("dimension_registry");
+
+        try {
+            Files.createDirectories(registryDir);
+            Path registryFile = registryDir.resolve("registry.txt");
+
+            // load existing lines
+            Set<String> dims = new HashSet<>();
+            if (Files.exists(registryFile)) {
+                dims.addAll(Files.readAllLines(registryFile));
+            }
+
+            // add + save only if new
+            if (dims.add(dimensionName)) {
+                Files.write(registryFile, dims);
+            }
+        } catch (IOException e) {
+            PocketRepose.LOGGER.error("Failed to write dimension registry", e);
         }
     }
 }
