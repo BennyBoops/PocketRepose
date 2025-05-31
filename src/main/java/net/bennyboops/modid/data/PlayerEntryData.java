@@ -19,7 +19,6 @@ public class PlayerEntryData extends PersistentState {
         this.entryPitch = 0f;
     }
 
-    /** load or create for this world */
     public static PlayerEntryData get(ServerWorld world) {
         PersistentStateManager mgr = world.getPersistentStateManager();
         return mgr.getOrCreate(

@@ -16,6 +16,7 @@ import net.minecraft.loot.context.LootContextParameterSet;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtList;
 import net.minecraft.nbt.NbtString;
+import net.minecraft.network.packet.s2c.play.StopSoundS2CPacket;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -239,6 +240,7 @@ public class SuitcaseBlock extends BlockWithEntity {
                 if (wasFirstTime) {
                     PocketRepose.ENTER_POCKET_DIMENSION.trigger(player);
                 }
+
                 player.stopRiding();
                 player.velocityModified = true;
                 player.setVelocity(Vec3d.ZERO);
@@ -246,11 +248,15 @@ public class SuitcaseBlock extends BlockWithEntity {
 
                 PlayerEntryData ped = PlayerEntryData.get(targetWorld);
                 Vec3d dest = ped.getEntryPos();
+
                 float yaw = ped.getEntryYaw();
                 float pitch = player.getPitch();
 
                 TeleportTarget tp = new TeleportTarget(dest, Vec3d.ZERO, yaw, pitch);
+
                 FabricDimensions.teleport(player, targetWorld, tp);
+
+                player.networkHandler.sendPacket(new StopSoundS2CPacket(null, null));
 
                 world.playSound(
                         null,
