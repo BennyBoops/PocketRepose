@@ -7,6 +7,7 @@ import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
+import net.minecraft.loot.context.LootContextParameterSet;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtList;
@@ -25,6 +26,7 @@ import net.minecraft.world.World;
 import net.minecraft.entity.Entity;
 import net.minecraft.world.chunk.WorldChunk;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,6 +54,12 @@ public class PocketPortalBlock extends Block {
     public PocketPortalBlock(Settings settings) {
         super(settings);
     }
+
+    @Override
+    public List<ItemStack> getDroppedStacks(BlockState state, LootContextParameterSet.Builder builder) {
+        return Collections.singletonList(new ItemStack(this));
+    }
+
 
     public static void storePlayerPosition(ServerPlayerEntity player) {
         LAST_KNOWN_POSITIONS.put(

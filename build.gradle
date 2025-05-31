@@ -24,15 +24,15 @@ configurations {
 }
 
 dependencies {
-	// Minecraft, mappings, loader, API
+
 	minecraft    "com.mojang:minecraft:${project.minecraft_version}"
 	mappings      "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-	// Fabric Loader for compile
+
 	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
-	annotationProcessor 'net.fabricmc:fabric-loom:1.8-SNAPSHOT'
+// annotationProcessor 'net.fabricmc:fabric-loom:1.8-SNAPSHOT'
 
 	modImplementation include('xyz.nucleoid:fantasy:0.4.11+1.20-rc1')
 }

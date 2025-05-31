@@ -68,7 +68,7 @@ public class ModBlocks {
                     .sounds(BlockSoundGroup.LODESTONE)
                     .nonOpaque()
                     .luminance(state -> 10)
-                    .strength(-1f)));
+                    .strength(5.0f)));
 
     private static Block registerBlock(String name, Block block) {
         registerBlockItem(name, block);

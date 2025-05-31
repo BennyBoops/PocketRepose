@@ -2,7 +2,9 @@ package net.bennyboops.modid.block;
 
 import net.bennyboops.modid.PocketRepose;
 import net.bennyboops.modid.block.entity.SuitcaseBlockEntity;
+import net.bennyboops.modid.data.PlayerEntryData;
 import net.bennyboops.modid.item.KeystoneItem;
+import net.fabricmc.fabric.api.dimension.v1.FabricDimensions;
 import net.minecraft.block.*;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.entity.Entity;
@@ -33,6 +35,7 @@ import net.minecraft.util.math.Direction;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.util.shape.VoxelShape;
 import net.minecraft.world.BlockView;
+import net.minecraft.world.TeleportTarget;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
 import java.util.Collections;
@@ -231,34 +234,31 @@ public class SuitcaseBlock extends BlockWithEntity {
             RegistryKey<World> dimensionKey = RegistryKey.of(RegistryKeys.WORLD, dimensionId);
             ServerWorld targetWorld = world.getServer().getWorld(dimensionKey);
             if (targetWorld != null) {
-
                 boolean wasFirstTime = suitcase.isFirstTimeEntering(player);
-
                 suitcase.playerEntered(player);
-
-                // Trigger achievement if it was their first time
                 if (wasFirstTime) {
                     PocketRepose.ENTER_POCKET_DIMENSION.trigger(player);
                 }
-
                 player.stopRiding();
                 player.velocityModified = true;
                 player.setVelocity(Vec3d.ZERO);
                 player.fallDistance = 0f;
-                player.requestTeleport(2.5, 66, 5.5);
-                world.getServer().execute(() -> {
-                    player.teleport(
-                            targetWorld,
-                            17.5,
-                            97,
-                            9.5,
-                            0.0f,
-                            player.getPitch()
-                    );
-                    world.playSound(null, pos,
-                            SoundEvents.ITEM_BUNDLE_DROP_CONTENTS,
-                            SoundCategory.PLAYERS, 2.0f, 1.0f);
-                });
+
+                PlayerEntryData ped = PlayerEntryData.get(targetWorld);
+                Vec3d dest = ped.getEntryPos();
+                float yaw = ped.getEntryYaw();
+                float pitch = player.getPitch();
+
+                TeleportTarget tp = new TeleportTarget(dest, Vec3d.ZERO, yaw, pitch);
+                FabricDimensions.teleport(player, targetWorld, tp);
+
+                world.playSound(
+                        null,
+                        pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5,
+                        SoundEvents.ITEM_BUNDLE_DROP_CONTENTS,
+                        SoundCategory.PLAYERS,
+                        2.0f, 1.0f
+                );
             }
         }
     }
