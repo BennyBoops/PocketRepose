@@ -239,18 +239,34 @@ public class SuitcaseBlock extends BlockWithEntity {
                 if (wasFirstTime) {
                     PocketRepose.ENTER_POCKET_DIMENSION.trigger(player);
                 }
+
                 player.stopRiding();
                 player.velocityModified = true;
                 player.setVelocity(Vec3d.ZERO);
                 player.fallDistance = 0f;
 
-                PlayerEntryData ped = PlayerEntryData.get(targetWorld);
-                Vec3d dest = ped.getEntryPos();
-                float yaw = ped.getEntryYaw();
-                float pitch = player.getPitch();
+                PlayerEntryData entryData = PlayerEntryData.get(targetWorld);
 
-                TeleportTarget tp = new TeleportTarget(dest, Vec3d.ZERO, yaw, pitch);
-                FabricDimensions.teleport(player, targetWorld, tp);
+                Vec3d  destination = entryData.getEntryPos();
+                float  destYaw     = entryData.getEntryYaw();
+                float  destPitch   = entryData.getEntryPitch();
+
+                player.teleport(
+                        targetWorld,
+                        destination.x,
+                        destination.y,
+                        destination.z,
+                        destYaw,
+                        destPitch
+                );
+
+                player.prevX = destination.x;
+                player.prevY = destination.y;
+                player.prevZ = destination.z;
+
+                player.lastRenderX = destination.x;
+                player.lastRenderY = destination.y;
+                player.lastRenderZ = destination.z;
 
                 world.playSound(
                         null,

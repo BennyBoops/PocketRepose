@@ -1,12 +1,16 @@
 package net.bennyboops.modid;
 
+import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.context.CommandContext;
 import net.bennyboops.modid.block.ModBlocks;
 import net.bennyboops.modid.block.SuitcaseBlock;
 import net.bennyboops.modid.block.entity.ModBlockEntities;
+import net.bennyboops.modid.block.entity.SuitcaseBlockEntity;
 import net.bennyboops.modid.criterion.EnterPocketDimensionCriterion;
 import net.bennyboops.modid.data.PlayerEntryData;
-import net.bennyboops.modid.data.PocketEntryData;
+import net.bennyboops.modid.data.MobEntryData;
+import net.bennyboops.modid.item.KeystoneItem;
 import net.bennyboops.modid.item.ModItemGroups;
 import net.bennyboops.modid.item.ModItems;
 import net.fabricmc.api.ModInitializer;
@@ -17,6 +21,7 @@ import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.advancement.criterion.Criteria;
 import net.minecraft.block.Block;
+import net.minecraft.block.Blocks;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
@@ -31,6 +36,7 @@ import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
 import net.minecraft.text.Text;
 import net.minecraft.util.*;
+import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.TeleportTarget;
 import net.minecraft.world.World;
@@ -43,7 +49,7 @@ import xyz.nucleoid.fantasy.RuntimeWorldConfig;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.List;
+import java.util.*;
 
 public class PocketRepose implements ModInitializer {
 
@@ -65,6 +71,7 @@ public class PocketRepose implements ModInitializer {
 		registerSuitcaseMobTeleport();
 		registerMobEntrySetter();
 		registerPlayerEntrySetter();
+		registerKeyRescueMob();
 
 		ModItems.registerModItems();
 		ModBlocks.registerModBlocks();
@@ -105,14 +112,14 @@ public class PocketRepose implements ModInitializer {
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
 			dispatcher.register(
 					LiteralArgumentBuilder.<ServerCommandSource>literal("pocket")
-							.then(CommandManager.literal("setplayerentry")
+							.then(CommandManager.literal("setPlayerEntry")
 									.executes(ctx -> {
 										ServerCommandSource src = ctx.getSource();
 										ServerWorld world = src.getWorld();
 										Identifier id = world.getRegistryKey().getValue();
 										if (!"pocket-repose".equals(id.getNamespace())
 												|| !id.getPath().startsWith("pocket_dimension_")) {
-											src.sendError(Text.literal("§cNot in a pocket dimension."));
+											src.sendError(Text.literal("§cNot in a pocket dimension"));
 											return 0;
 										}
 										Vec3d pos   = src.getPosition();
@@ -140,7 +147,7 @@ public class PocketRepose implements ModInitializer {
 			dispatcher.register(
 					LiteralArgumentBuilder.<ServerCommandSource>literal("pocket")
 							//mob entry setter: /pocket setmobentry
-							.then(CommandManager.literal("setmobentry")
+							.then(CommandManager.literal("setMobEntry")
 									.executes(ctx -> {
 										ServerCommandSource src = ctx.getSource();
 										ServerWorld world = src.getWorld();
@@ -154,7 +161,7 @@ public class PocketRepose implements ModInitializer {
 										float yaw   = src.getEntity().getYaw();
 										float pitch = src.getEntity().getPitch();
 
-										PocketEntryData.get(world).setEntry(pos, yaw, pitch);
+										MobEntryData.get(world).setEntry(pos, yaw, pitch);
 										src.sendFeedback(() -> Text.literal(
 												String.format("§aMob entry set to %.2f, %.2f, %.2f", pos.x, pos.y, pos.z)
 										), false);
@@ -162,7 +169,7 @@ public class PocketRepose implements ModInitializer {
 									})
 							)
 							//player entry setter: /pocket setplayerentry
-							.then(CommandManager.literal("setplayerentry")
+							.then(CommandManager.literal("setPlayerEntry")
 									.executes(ctx -> {
 										ServerCommandSource src = ctx.getSource();
 										ServerWorld world = src.getWorld();
@@ -183,9 +190,55 @@ public class PocketRepose implements ModInitializer {
 										return 1;
 									})
 							)
+
+							//reset command
+							.then(CommandManager.literal("resetPlayerEntry")
+									.then(CommandManager.argument("dimension", StringArgumentType.word())
+											.executes(ctx -> resetPocketDimension(ctx, StringArgumentType.getString(ctx, "dimension")))
+									)
+							)
 			);
 		});
 	}
+
+
+	private int resetPocketDimension(CommandContext<ServerCommandSource> ctx, String dimSuffix) {
+		ServerCommandSource src = ctx.getSource();
+
+		Identifier dimId = new Identifier("pocket-repose", "pocket_dimension_" + dimSuffix);
+		RegistryKey<World> worldKey = RegistryKey.of(RegistryKeys.WORLD, dimId);
+		ServerWorld targetWorld = src.getServer().getWorld(worldKey);
+
+		if (targetWorld == null) {
+			src.sendError(Text.literal("§cPocket dimension '"
+					+ dimSuffix + "' not found"));
+			return 0;
+		}
+
+		BlockPos plankPos = new BlockPos(17, 96, 9);
+		targetWorld.setBlockState(plankPos, Blocks.OAK_PLANKS.getDefaultState());
+
+		for (int y = 97; y <= 99; y++) {
+			BlockPos airPos = new BlockPos(17, y, 9);
+			targetWorld.setBlockState(airPos, Blocks.AIR.getDefaultState());
+		}
+
+		BlockPos portalPos = new BlockPos(17, 100, 9);
+		targetWorld.setBlockState(portalPos, ModBlocks.PORTAL.getDefaultState());
+
+		PlayerEntryData playerData = PlayerEntryData.get(targetWorld);
+		playerData.setEntry(new Vec3d(17.5, 97.0, 9.5), 0f, 0f);
+
+		src.sendFeedback(() -> Text.literal(
+				"§aPocket dimension '" + dimSuffix + "' entry reset"
+		), false);
+
+		return 1;
+	}
+
+
+
+
 
 	private void registerPlayerEntrySetter() {
 		UseItemCallback.EVENT.register((player, world, hand) -> {
@@ -234,7 +287,7 @@ public class PocketRepose implements ModInitializer {
 			Vec3d pos   = player.getPos();
 			float yaw   = player.getYaw();
 			float pitch = player.getPitch();
-			net.bennyboops.modid.data.PocketEntryData.get(sw).setEntry(pos, yaw, pitch);
+			MobEntryData.get(sw).setEntry(pos, yaw, pitch);
 
 			player.sendMessage(Text.literal(
 					String.format("§aMob entry location set to %.1f, %.1f, %.1f",
@@ -297,7 +350,7 @@ public class PocketRepose implements ModInitializer {
 				return ActionResult.PASS;
 			}
 
-			PocketEntryData data = PocketEntryData.get(targetWorld);
+			MobEntryData data = MobEntryData.get(targetWorld);
 			Vec3d dest   = data.getEntryPos();
 			float yaw    = data.getEntryYaw();
 			float pitch  = data.getEntryPitch();
@@ -321,6 +374,76 @@ public class PocketRepose implements ModInitializer {
 					SoundCategory.PLAYERS,
 					0.5f, 1.0f
 			);
+			return ActionResult.SUCCESS;
+		});
+	}
+
+	private void registerKeyRescueMob() {
+		UseEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
+			if (world.isClient) {
+				return ActionResult.PASS;
+			}
+
+			ItemStack held = player.getStackInHand(hand);
+			if (!(held.getItem() instanceof KeystoneItem)) {
+				return ActionResult.PASS;
+			}
+
+			Identifier dimId = world.getRegistryKey().getValue();
+			String namespace = dimId.getNamespace();
+			String path      = dimId.getPath();
+			String prefix    = "pocket_dimension_";
+			if (!namespace.equals("pocket-repose") || !path.startsWith(prefix)) {
+				return ActionResult.PASS;
+			}
+
+			String keystoneName = path.substring(prefix.length());
+
+			if (!(entity instanceof LivingEntity mob)) {
+				return ActionResult.PASS;
+			}
+
+			String playerUuid = player.getUuidAsString();
+			BlockPos suitcasePos = SuitcaseBlockEntity.findSuitcasePosition(keystoneName, playerUuid);
+			if (suitcasePos == null) {
+				player.sendMessage(Text.literal("§cNo suitcase found"), true);
+				return ActionResult.FAIL;
+			}
+
+			ServerWorld overworld = world.getServer().getWorld(World.OVERWORLD);
+			if (overworld == null) {
+				player.sendMessage(Text.literal("§cOverworld is not loaded"), true);
+				return ActionResult.FAIL;
+			}
+
+			Vec3d exitPos = new Vec3d(
+					suitcasePos.getX() + 0.5,
+					suitcasePos.getY() + 0.5,
+					suitcasePos.getZ() + 0.5
+			);
+			float yaw   = mob.getYaw();
+			float pitch = mob.getPitch();
+			TeleportTarget tpTarget = new TeleportTarget(exitPos, Vec3d.ZERO, yaw, pitch);
+
+			FabricDimensions.teleport(mob, overworld, tpTarget);
+
+			overworld.playSound(
+					null,
+					exitPos.x, exitPos.y, exitPos.z,
+					SoundEvents.ITEM_BUNDLE_DROP_CONTENTS,
+					SoundCategory.PLAYERS,
+					2.0f, 1.0f
+			);
+
+			world.playSound(
+					null,
+					player.getX(), player.getY(), player.getZ(),
+					SoundEvents.ITEM_BUNDLE_DROP_CONTENTS,
+					SoundCategory.PLAYERS,
+					2.0f, 1.0f
+			);
+//			player.sendMessage(Text.literal("§aMob retrieved"), true);
+
 			return ActionResult.SUCCESS;
 		});
 	}

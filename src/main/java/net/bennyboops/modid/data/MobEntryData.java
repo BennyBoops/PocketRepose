@@ -6,27 +6,27 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.PersistentState;
 import net.minecraft.world.PersistentStateManager;
 
-public class PocketEntryData extends PersistentState {
+public class MobEntryData extends PersistentState {
     private static final String DATA_KEY = "pocket_entry_data";
     private Vec3d entryPos = Vec3d.ZERO;
     private float entryYaw = 0f, entryPitch = 0f;
 
-    public PocketEntryData() {
+    public MobEntryData() {
         super();
         this.entryPos   = new Vec3d(35.5, 85, 16.5);
         this.entryYaw   = 0f;
         this.entryPitch = 0f;
     }
 
-    public static PocketEntryData get(ServerWorld world) {
+    public static MobEntryData get(ServerWorld world) {
         PersistentStateManager mgr = world.getPersistentStateManager();
         return mgr.getOrCreate(
                 nbt -> {
-                    PocketEntryData d = new PocketEntryData();
+                    MobEntryData d = new MobEntryData();
                     d.readNbt(nbt);
                     return d;
                 },
-                PocketEntryData::new,
+                MobEntryData::new,
                 DATA_KEY
         );
     }
