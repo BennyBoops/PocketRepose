@@ -129,7 +129,8 @@ public class PocketPortalBlock extends Block {
                 updateItemLore(stack, remainingPlayers);
             }
         }
-        SuitcaseBlockEntity.removeSuitcaseEntry(keystoneName, player.getUuidAsString());
+        SuitcaseBlockEntity.removeSuitcaseEntry(keystoneName, player.getUuidAsString(), player.getServer()
+        );
     }
 
     @Override
@@ -171,7 +172,7 @@ public class PocketPortalBlock extends Block {
                             overworld.getSpawnPos().getY() + 1.0,
                             overworld.getSpawnPos().getZ() + 0.5, 0, 0);
                 }
-                SuitcaseBlockEntity.removeSuitcaseEntry(keystoneName, player.getUuidAsString());
+                SuitcaseBlockEntity.removeSuitcaseEntry(keystoneName, player.getUuidAsString(), world.getServer());
                 LAST_KNOWN_POSITIONS.remove(player.getUuidAsString());
             }
         }
@@ -314,7 +315,7 @@ public class PocketPortalBlock extends Block {
                 suitcaseItem.setStack(stack);
             }
         }
-        SuitcaseBlockEntity.removeSuitcaseEntry(keystoneName, player.getUuidAsString());
+        SuitcaseBlockEntity.removeSuitcaseEntry(keystoneName, player.getUuidAsString(), player.getServer());
     }
 
     private void updateItemLore(ItemStack stack, int playerCount) {

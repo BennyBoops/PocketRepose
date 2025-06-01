@@ -10,6 +10,7 @@ import net.bennyboops.modid.block.entity.SuitcaseBlockEntity;
 import net.bennyboops.modid.criterion.EnterPocketDimensionCriterion;
 import net.bennyboops.modid.data.PlayerEntryData;
 import net.bennyboops.modid.data.MobEntryData;
+import net.bennyboops.modid.data.SuitcaseRegistrySavedData;
 import net.bennyboops.modid.item.KeystoneItem;
 import net.bennyboops.modid.item.ModItemGroups;
 import net.bennyboops.modid.item.ModItems;
@@ -29,6 +30,7 @@ import net.minecraft.item.Items;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.world.ServerWorld;
@@ -64,6 +66,10 @@ public class PocketRepose implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
+
+		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+			SuitcaseRegistrySavedData.onServerStart(server);
+		});
 
 		Criteria.register(ENTER_POCKET_DIMENSION);
 

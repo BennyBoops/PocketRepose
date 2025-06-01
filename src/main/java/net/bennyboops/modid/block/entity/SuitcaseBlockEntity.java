@@ -1,6 +1,7 @@
 package net.bennyboops.modid.block.entity;
 
 import net.bennyboops.modid.block.PocketPortalBlock;
+import net.bennyboops.modid.data.SuitcaseRegistrySavedData;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.nbt.NbtCompound;
@@ -10,6 +11,7 @@ import net.minecraft.network.listener.ClientPlayPacketListener;
 import net.minecraft.network.packet.Packet;
 import net.minecraft.network.packet.s2c.play.BlockEntityUpdateS2CPacket;
 import net.minecraft.registry.RegistryKey;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
@@ -95,6 +97,7 @@ public class SuitcaseBlockEntity extends BlockEntity {
 
     public void playerEntered(ServerPlayerEntity player) {
         enteredPlayers.removeIf(data -> data.uuid.equals(player.getUuidAsString()));
+
         EnteredPlayerData data = new EnteredPlayerData(
                 player.getUuidAsString(),
                 player.getX(), player.getY(), player.getZ(),
@@ -103,15 +106,21 @@ public class SuitcaseBlockEntity extends BlockEntity {
         );
         enteredPlayers.add(data);
 
-        //For Advancement
         PLAYERS_WHO_ENTERED.add(player.getUuid());
 
         Map<String, BlockPos> suitcases = SUITCASE_REGISTRY.computeIfAbsent(
                 boundKeystoneName, k -> new HashMap<>()
         );
         suitcases.put(player.getUuidAsString(), this.getPos());
+
         PocketPortalBlock.storePlayerPosition(player);
+
         markDirty();
+
+        MinecraftServer server = player.getServer();
+        if (server != null) {
+            SuitcaseRegistrySavedData.onRegistryChanged(server);
+        }
     }
 
     public EnteredPlayerData getExitPosition(String playerUuid) {
@@ -208,12 +217,15 @@ public class SuitcaseBlockEntity extends BlockEntity {
         return null;
     }
 
-    public static void removeSuitcaseEntry(String keystoneName, String playerUuid) {
+    public static void removeSuitcaseEntry(String keystoneName, String playerUuid, MinecraftServer server) {
         Map<String, BlockPos> suitcases = SUITCASE_REGISTRY.get(keystoneName);
         if (suitcases != null) {
             suitcases.remove(playerUuid);
             if (suitcases.isEmpty()) {
                 SUITCASE_REGISTRY.remove(keystoneName);
+            }
+            if (server != null) {
+                SuitcaseRegistrySavedData.onRegistryChanged(server);
             }
         }
     }
