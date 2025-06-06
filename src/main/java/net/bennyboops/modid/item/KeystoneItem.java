@@ -27,9 +27,9 @@ import net.minecraft.world.dimension.DimensionType;
 import net.minecraft.world.gen.chunk.*;
 import org.jetbrains.annotations.Nullable;
 
-import xyz.nucleoid.fantasy.Fantasy;
-import xyz.nucleoid.fantasy.RuntimeWorldConfig;
-import xyz.nucleoid.fantasy.RuntimeWorldHandle;
+import net.bennyboops.modid.world.Fantasy;
+import net.bennyboops.modid.world.RuntimeWorldConfig;
+import net.bennyboops.modid.world.RuntimeWorldHandle;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -88,7 +88,9 @@ public class KeystoneItem extends Item {
         RegistryKey<DimensionType> typeKey = RegistryKey.of(RegistryKeys.DIMENSION_TYPE, POCKET_DIMENSION_TYPE_ID);
 
         Registry<Biome> biomeRegistry = server.getRegistryManager().get(RegistryKeys.BIOME);
-        RegistryKey<Biome> voidBiomeKey = RegistryKey.of(RegistryKeys.BIOME, new Identifier("minecraft", "the_void"));
+
+        //RegistryKey<Biome> voidBiomeKey = RegistryKey.of(RegistryKeys.BIOME, new Identifier("minecraft", "the_void"));
+        RegistryKey<Biome> voidBiomeKey = RegistryKey.of(RegistryKeys.BIOME, new Identifier("pocket-repose", "pocket_islands"));
 
         ChunkGenerator generator = new PortalChunkGenerator(biomeRegistry);
 
@@ -133,7 +135,7 @@ public class KeystoneItem extends Item {
                                 .setRotation(BlockRotation.NONE)
                                 .setIgnoreEntities(false),
                         world.getRandom(),
-                        Block.NOTIFY_LISTENERS
+                        Block.NOTIFY_LISTENERS | Block.FORCE_STATE
                 );
 
                 System.out.println("Immediately placed pocket island structure in new dimension: " + dimensionName);

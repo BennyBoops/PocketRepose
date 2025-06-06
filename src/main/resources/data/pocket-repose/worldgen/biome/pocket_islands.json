@@ -1,54 +1,48 @@
 {
   "carvers": {},
-  "downfall": 0.8,
+  "downfall": 0.5,
   "effects": {
     "fog_color": 12638463,
-    "sky_color": 7972607,
+    "mood_sound": {
+      "block_search_extent": 8,
+      "offset": 2,
+      "sound": "minecraft:ambient.cave",
+      "tick_delay": 6000,
+      "music": {
+        "sound": "minecraft:music.creative",
+        "min_delay": 5000,
+        "max_delay": 6000,
+        "replace_current_music": false
+      }
+    },
+    "sky_color": 8103167,
     "water_color": 4159204,
-    "water_fog_color": 329011,
-    "music": {
-      "sound": "minecraft:music.creative",
-      "min_delay": 5000,
-      "max_delay": 6000,
-      "replace_current_music": false
-    }
+    "water_fog_color": 329011
   },
-  "features": [],
+  "features": [
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    [],
+    []
+  ],
   "has_precipitation": true,
   "spawn_costs": {},
   "spawners": {
-    "creature": [
-      {
-        "type": "minecraft:sheep",
-        "maxCount": 4,
-        "minCount": 4,
-        "weight": 12
-      },
-      {
-        "type": "minecraft:pig",
-        "maxCount": 4,
-        "minCount": 4,
-        "weight": 10
-      },
-      {
-        "type": "minecraft:chicken",
-        "maxCount": 4,
-        "minCount": 4,
-        "weight": 10
-      },
-      {
-        "type": "minecraft:cow",
-        "maxCount": 4,
-        "minCount": 4,
-        "weight": 8
-      },
-      {
-        "type": "minecraft:rabbit",
-        "maxCount": 3,
-        "minCount": 2,
-        "weight": 4
-      }
-    ]
+    "ambient": [],
+    "axolotls": [],
+    "creature": [],
+    "misc": [],
+    "monster": [],
+    "underground_water_creature": [],
+    "water_ambient": [],
+    "water_creature": []
   },
-  "temperature": 0.7
+  "temperature": 0.8
 }

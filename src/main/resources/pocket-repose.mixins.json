@@ -6,6 +6,13 @@
 	"mixins": [
 		"AnvilScreenHandlerMixin",
 		"BedBlockMixin",
+		"MinecraftServerAccess",
+		"MinecraftServerMixin",
+		"ServerChunkManagerMixin",
+		"ServerWorldMixin",
+		"DimensionOptionsMixin",
+		"DimensionOptionsRegistryHolderMixin",
+		"SimpleRegistryMixin",
 		"ExampleMixin"
 	],
 	"injectors": {

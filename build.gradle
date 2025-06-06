@@ -19,6 +19,32 @@ fabricApi {
 	configureDataGeneration()
 }
 
+
+sourceSets {
+	testmod {
+		compileClasspath += main.compileClasspath
+		runtimeClasspath += main.runtimeClasspath
+	}
+}
+
+loom {
+	runs {
+		testmodClient {
+			client()
+			name = "Testmod Client"
+			source sourceSets.testmod
+		}
+		testmodServer {
+			server()
+			name = "Testmod Server"
+			source sourceSets.testmod
+		}
+	}
+
+	accessWidenerPath = file("src/main/resources/fantasy.accesswidener")
+}
+
+
 configurations {
 
 }
@@ -32,11 +58,11 @@ dependencies {
 
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
-	//annotationProcessor 'net.fabricmc:fabric-loom:1.8-SNAPSHOT'
+	//modImplementation include('xyz.nucleoid:fantasy:0.4.11+1.20-rc1')
 
-	modImplementation include('xyz.nucleoid:fantasy:0.4.11+1.20-rc1')
+	modLocalRuntime "eu.pb4:polymer-reg-sync-manipulator:0.5.5+1.20.1"
 
-	//modImplementation include('xyz.nucleoid:fantasy:0.5.0+1.20.4')
+	testmodImplementation sourceSets.main.output
 }
 
 processResources {

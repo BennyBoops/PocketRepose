@@ -32,7 +32,6 @@ import net.minecraft.nbt.NbtCompound;
 import net.minecraft.registry.Registry;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.world.ServerWorld;
@@ -49,13 +48,12 @@ import net.minecraft.world.dimension.DimensionType;
 import net.minecraft.world.gen.chunk.ChunkGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import xyz.nucleoid.fantasy.Fantasy;
-import xyz.nucleoid.fantasy.RuntimeWorldConfig;
+import net.bennyboops.modid.world.Fantasy;
+import net.bennyboops.modid.world.RuntimeWorldConfig;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.*;
 
 public class PocketRepose implements ModInitializer {
 
@@ -102,7 +100,7 @@ public class PocketRepose implements ModInitializer {
 			}
 			Registry<Biome> biomeRegistry = server.getRegistryManager().get(RegistryKeys.BIOME);
 			RegistryKey<Biome> voidBiomeKey =
-					RegistryKey.of(RegistryKeys.BIOME, new Identifier("minecraft", "the_void"));
+					RegistryKey.of(RegistryKeys.BIOME, new Identifier("pocket-repose", "pocket_islands"));
 
 			long seed = server.getOverworld().getSeed();
 			try {
@@ -154,7 +152,7 @@ public class PocketRepose implements ModInitializer {
 
 
 	public static final RegistryKey<Biome> VOID_BIOME_KEY =
-			RegistryKey.of(RegistryKeys.BIOME, new Identifier("minecraft", "the_void"));
+			RegistryKey.of(RegistryKeys.BIOME, new Identifier("pocket-repose", "pocket_islands"));
 
 
 
@@ -163,6 +161,7 @@ public class PocketRepose implements ModInitializer {
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
 			dispatcher.register(
 					LiteralArgumentBuilder.<ServerCommandSource>literal("pocketRepose")
+
 							//mob entry setter: /pocketRepose setmobentry
 							.then(CommandManager.literal("setMobEntry")
 									.executes(ctx -> {
@@ -213,6 +212,33 @@ public class PocketRepose implements ModInitializer {
 									.then(CommandManager.argument("dimension", StringArgumentType.word())
 											.executes(ctx -> resetPocketDimension(ctx, StringArgumentType.getString(ctx, "dimension")))
 									)
+							)
+
+							//list command. only OPs with permission level 2+ can run
+							.then(CommandManager.literal("listDimensions")
+
+									.requires(src -> src.hasPermissionLevel(2))
+									.executes(ctx -> {
+										ServerCommandSource src = ctx.getSource();
+										src.sendFeedback(() -> Text.literal("§aPocket Dimensions Loaded:"), false);
+										boolean foundAny = false;
+										for (ServerWorld world : src.getServer().getWorlds()) {
+											Identifier id = world.getRegistryKey().getValue();
+											String namespace = id.getNamespace();
+											String path = id.getPath();
+											String prefix = "pocket_dimension_";
+
+											if ("pocket-repose".equals(namespace) && path.startsWith(prefix)) {
+												String suffix = path.substring(prefix.length());
+												src.sendFeedback(() -> Text.literal(" " + suffix), false);
+												foundAny = true;
+											}
+										}
+										if (!foundAny) {
+											src.sendFeedback(() -> Text.literal("§cNo pocket dimensions found."), false);
+										}
+										return 1;
+									})
 							)
 			);
 		});
