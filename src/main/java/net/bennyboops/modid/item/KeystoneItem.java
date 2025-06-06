@@ -30,7 +30,6 @@ import org.jetbrains.annotations.Nullable;
 import xyz.nucleoid.fantasy.Fantasy;
 import xyz.nucleoid.fantasy.RuntimeWorldConfig;
 import xyz.nucleoid.fantasy.RuntimeWorldHandle;
-import xyz.nucleoid.fantasy.util.VoidChunkGenerator;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -76,42 +75,35 @@ public class KeystoneItem extends Item {
         return TypedActionResult.success(stack);
     }
 
+
     private void createOrLoadPersistentDimension(MinecraftServer server, String dimensionName) {
-        // 1) the world‐ID (where files will live)
         Identifier worldId = new Identifier("pocket-repose", dimensionName);
 
-        // 2) Check if dimension already exists by checking if world files exist
         Path worldSavePath = server.getSavePath(WorldSavePath.ROOT)
                 .resolve("dimensions")
                 .resolve("pocket-repose")
                 .resolve(dimensionName);
         boolean dimensionExists = Files.exists(worldSavePath);
 
-        // 3) the registry‐key for already registered DimensionType
         RegistryKey<DimensionType> typeKey = RegistryKey.of(RegistryKeys.DIMENSION_TYPE, POCKET_DIMENSION_TYPE_ID);
 
-        // 4) Create void generator using Fantasy's VoidChunkGenerator
         Registry<Biome> biomeRegistry = server.getRegistryManager().get(RegistryKeys.BIOME);
-        RegistryKey<Biome> pocketIslandsBiome = RegistryKey.of(RegistryKeys.BIOME, new Identifier("pocket-repose", "pocket_islands"));
+        RegistryKey<Biome> voidBiomeKey = RegistryKey.of(RegistryKeys.BIOME, new Identifier("minecraft", "the_void"));
 
-        // Create the void chunk generator using Fantasy's constructor
-        ChunkGenerator generator = new PortalChunkGenerator(biomeRegistry, pocketIslandsBiome);
+        ChunkGenerator generator = new PortalChunkGenerator(biomeRegistry);
 
         long seed = server.getOverworld().getSeed();
 
-        // 5) build a persistent world config using the key, not the raw object
         RuntimeWorldConfig config = new RuntimeWorldConfig()
                 .setDimensionType(typeKey)
                 .setGenerator(generator)
                 .setSeed(seed);
 
-        // 6) Load or create dimension
         RuntimeWorldHandle handle = Fantasy.get(server)
                 .getOrOpenPersistentWorld(worldId, config);
 
         registerDimension(server, dimensionName);
 
-        // 7) Only place structure if this is a truly new dimension
         if (!dimensionExists) {
             ServerWorld world = handle.asWorld();
             placeStructureImmediately(server, world, dimensionName);

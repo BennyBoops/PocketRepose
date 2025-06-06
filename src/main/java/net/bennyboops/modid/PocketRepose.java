@@ -14,6 +14,7 @@ import net.bennyboops.modid.data.SuitcaseRegistrySavedData;
 import net.bennyboops.modid.item.KeystoneItem;
 import net.bennyboops.modid.item.ModItemGroups;
 import net.bennyboops.modid.item.ModItems;
+import net.bennyboops.modid.world.PortalChunkGenerator;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.dimension.v1.FabricDimensions;
@@ -28,6 +29,7 @@ import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.registry.Registry;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.MinecraftServer;
@@ -42,7 +44,9 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.TeleportTarget;
 import net.minecraft.world.World;
+import net.minecraft.world.biome.Biome;
 import net.minecraft.world.dimension.DimensionType;
+import net.minecraft.world.gen.chunk.ChunkGenerator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import xyz.nucleoid.fantasy.Fantasy;
@@ -66,6 +70,8 @@ public class PocketRepose implements ModInitializer {
 
 	@Override
 	public void onInitialize() {
+
+		LOGGER.info("Initializing " + MOD_ID);
 
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
 			SuitcaseRegistrySavedData.onServerStart(server);
@@ -91,28 +97,30 @@ public class PocketRepose implements ModInitializer {
 					.resolve("dimension_registry")
 					.resolve("registry.txt");
 
-			if (Files.exists(registryFile)) {
-				try {
-					List<String> dimensions = Files.readAllLines(registryFile);
-					for (String dimName : dimensions) {
-						Identifier worldId = new Identifier("pocket-repose", dimName);
+			if (!Files.exists(registryFile)) {
+				return;
+			}
+			Registry<Biome> biomeRegistry = server.getRegistryManager().get(RegistryKeys.BIOME);
+			RegistryKey<Biome> voidBiomeKey =
+					RegistryKey.of(RegistryKeys.BIOME, new Identifier("minecraft", "the_void"));
 
-						RuntimeWorldConfig cfg = new RuntimeWorldConfig()
-								.setDimensionType(POCKET_DIMENSION_TYPE_KEY)
-								.setGenerator(server.getOverworld().getChunkManager().getChunkGenerator())
-								.setSeed(server.getOverworld().getSeed());
+			long seed = server.getOverworld().getSeed();
+			try {
+				for (String dimName : Files.readAllLines(registryFile)) {
+					Identifier worldId = new Identifier("pocket-repose", dimName);
 
-						Fantasy.get(server)
-								.getOrOpenPersistentWorld(worldId, cfg);
-					}
-				} catch (IOException e) {
-					PocketRepose.LOGGER.error("Failed to reload pocket dimensions", e);
+					ChunkGenerator voidGen = new PortalChunkGenerator(biomeRegistry);
+
+					RuntimeWorldConfig cfg = new RuntimeWorldConfig()
+							.setDimensionType(POCKET_DIMENSION_TYPE_KEY)
+							.setGenerator(voidGen)
+							.setSeed(seed);
+					Fantasy.get(server).getOrOpenPersistentWorld(worldId, cfg);
 				}
+			} catch (IOException e) {
+				PocketRepose.LOGGER.error("Failed to reload pocket dimensions", e);
 			}
 		});
-		LOGGER.info("Initializing " + MOD_ID);
-
-
 
 		// Initialize player entry location
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
@@ -143,6 +151,13 @@ public class PocketRepose implements ModInitializer {
 									})));
 		});
 	}
+
+
+	public static final RegistryKey<Biome> VOID_BIOME_KEY =
+			RegistryKey.of(RegistryKeys.BIOME, new Identifier("minecraft", "the_void"));
+
+
+
 
 	private void registerPocketCommands() {
 		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {

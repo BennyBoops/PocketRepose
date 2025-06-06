@@ -149,7 +149,7 @@ public class PocketPortalBlock extends Block {
                 // Method 1: Try to teleport to the original suitcase block entity
                 teleported = attemptSuitcaseTeleport(world, overworld, player, keystoneName);
 
-                // Method 2: Try to find suitcase in a player's inventory (new method)
+                // Method 2: Try to find suitcase in a player's inventory
                 if (!teleported) {
                     teleported = attemptPlayerInventorySuitcaseTeleport(world, overworld, player, keystoneName);
                 }
@@ -166,7 +166,7 @@ public class PocketPortalBlock extends Block {
 
                 // Fallback: Take them to spawn
                 if (!teleported) {
-                    player.sendMessage(Text.literal("§cCouldn't find your return point. Taking you to spawn.").formatted(Formatting.RED), true);
+                    player.sendMessage(Text.literal("§c...").formatted(Formatting.RED), true);
                     teleportToPosition(world, player, overworld,
                             overworld.getSpawnPos().getX() + 0.5,
                             overworld.getSpawnPos().getY() + 1.0,

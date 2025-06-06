@@ -32,9 +32,11 @@ dependencies {
 
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
 
-// annotationProcessor 'net.fabricmc:fabric-loom:1.8-SNAPSHOT'
+	//annotationProcessor 'net.fabricmc:fabric-loom:1.8-SNAPSHOT'
 
 	modImplementation include('xyz.nucleoid:fantasy:0.4.11+1.20-rc1')
+
+	//modImplementation include('xyz.nucleoid:fantasy:0.5.0+1.20.4')
 }
 
 processResources {
