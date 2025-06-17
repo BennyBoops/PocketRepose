@@ -60,7 +60,7 @@ dependencies {
 
 	//modImplementation include('xyz.nucleoid:fantasy:0.4.11+1.20-rc1')
 
-	modLocalRuntime "eu.pb4:polymer-reg-sync-manipulator:0.5.5+1.20.1"
+	//modLocalRuntime "eu.pb4:polymer-reg-sync-manipulator:0.5.5+1.20.1"
 
 	testmodImplementation sourceSets.main.output
 }
