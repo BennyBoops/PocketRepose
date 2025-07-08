@@ -13,7 +13,7 @@ import net.minecraft.util.Identifier;
 
 public class ModItemGroups {
     public static final ItemGroup POCKET_GROUP = Registry.register(Registries.ITEM_GROUP,
-            new Identifier(PocketRepose.MOD_ID, "pocket"),
+            Identifier.of(PocketRepose.MOD_ID, "pocket"),
             FabricItemGroup.builder().displayName(Text.translatable("itemgroup.pocket"))
                     .icon(() -> new ItemStack(ModItems.KEYSTONE)).entries((displayContext, entries) -> {
 

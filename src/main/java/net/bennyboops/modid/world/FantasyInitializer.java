@@ -10,6 +10,6 @@ import net.bennyboops.modid.util.VoidChunkGenerator;
 public final class FantasyInitializer implements ModInitializer {
     @Override
     public void onInitialize() {
-        Registry.register(Registries.CHUNK_GENERATOR, new Identifier(Fantasy.ID, "void"), VoidChunkGenerator.CODEC);
+        Registry.register(Registries.CHUNK_GENERATOR, Identifier.of(Fantasy.ID, "void"), VoidChunkGenerator.CODEC);
     }
 }

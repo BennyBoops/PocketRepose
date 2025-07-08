@@ -11,7 +11,7 @@ public class ModBlockEntities {
     public static final BlockEntityType<SuitcaseBlockEntity> SUITCASE_BLOCK_ENTITY =
             Registry.register(
                     Registries.BLOCK_ENTITY_TYPE,
-                    new Identifier("pocket-repose", "suitcase"),
+                    Identifier.of("pocket-repose", "suitcase"),
                     FabricBlockEntityTypeBuilder.create(
                             SuitcaseBlockEntity::new,
                             ModBlocks.SUITCASE

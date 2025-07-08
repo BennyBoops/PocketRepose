@@ -1,11 +1,11 @@
 package net.bennyboops.modid.world;
 
-import com.mojang.serialization.Lifecycle;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
 import net.minecraft.registry.DynamicRegistryManager;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.SimpleRegistry;
+import net.minecraft.registry.entry.RegistryEntryInfo;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.text.Text;
@@ -14,11 +14,6 @@ import net.minecraft.world.World;
 import net.minecraft.world.dimension.DimensionOptions;
 import net.minecraft.world.level.storage.LevelStorage;
 import org.apache.commons.io.FileUtils;
-import net.bennyboops.modid.world.Fantasy;
-import net.bennyboops.modid.world.FantasyDimensionOptions;
-import net.bennyboops.modid.world.RemoveFromRegistry;
-import net.bennyboops.modid.world.RuntimeWorld;
-import net.bennyboops.modid.world.RuntimeWorldConfig;
 import net.bennyboops.modid.mixin.MinecraftServerAccess;
 
 import java.io.File;
@@ -37,19 +32,19 @@ final class RuntimeWorldManager {
         DimensionOptions options = config.createDimensionOptions(this.server);
 
         if (style == RuntimeWorld.Style.TEMPORARY) {
-            ((net.bennyboops.modid.world.FantasyDimensionOptions) (Object) options).fantasy$setSave(false);
+            ((FantasyDimensionOptions) (Object) options).fantasy$setSave(false);
         }
         ((FantasyDimensionOptions) (Object) options).fantasy$setSaveProperties(false);
 
         SimpleRegistry<DimensionOptions> dimensionsRegistry = getDimensionsRegistry(this.server);
-        boolean isFrozen = ((net.bennyboops.modid.world.RemoveFromRegistry<?>) dimensionsRegistry).fantasy$isFrozen();
-        ((net.bennyboops.modid.world.RemoveFromRegistry<?>) dimensionsRegistry).fantasy$setFrozen(false);
+        boolean isFrozen = ((RemoveFromRegistry<?>) dimensionsRegistry).fantasy$isFrozen();
+        ((RemoveFromRegistry<?>) dimensionsRegistry).fantasy$setFrozen(false);
 
         var key = RegistryKey.of(RegistryKeys.DIMENSION, worldKey.getValue());
         if(!dimensionsRegistry.contains(key)) {
-            dimensionsRegistry.add(key, options, Lifecycle.stable());
+            dimensionsRegistry.add(key, options, RegistryEntryInfo.DEFAULT);
         }
-        ((net.bennyboops.modid.world.RemoveFromRegistry<?>) dimensionsRegistry).fantasy$setFrozen(isFrozen);
+        ((RemoveFromRegistry<?>) dimensionsRegistry).fantasy$setFrozen(isFrozen);
 
         RuntimeWorld world = config.getWorldConstructor().createWorld(this.server, worldKey, config, style);
 
@@ -69,7 +64,7 @@ final class RuntimeWorldManager {
             ServerWorldEvents.UNLOAD.invoker().onWorldUnload(this.server, world);
 
             SimpleRegistry<DimensionOptions> dimensionsRegistry = getDimensionsRegistry(this.server);
-            net.bennyboops.modid.world.RemoveFromRegistry.remove(dimensionsRegistry, dimensionKey.getValue());
+            RemoveFromRegistry.remove(dimensionsRegistry, dimensionKey.getValue());
 
             LevelStorage.Session session = this.serverAccess.getSession();
             File worldDirectory = session.getWorldDirectory(dimensionKey).toFile();
@@ -105,13 +100,13 @@ final class RuntimeWorldManager {
                 public void progressStagePercentage(int percentage) {}
 
                 @Override
-                public void setDone() {
-                    ServerWorldEvents.UNLOAD.invoker().onWorldUnload(RuntimeWorldManager.this.server, world);
-
-                    SimpleRegistry<DimensionOptions> dimensionsRegistry = getDimensionsRegistry(RuntimeWorldManager.this.server);
-                    RemoveFromRegistry.remove(dimensionsRegistry, dimensionKey.getValue());
-                }
+                public void setDone() {}
             }, true, false);
+
+            ServerWorldEvents.UNLOAD.invoker().onWorldUnload(RuntimeWorldManager.this.server, world);
+
+            SimpleRegistry<DimensionOptions> dimensionsRegistry = getDimensionsRegistry(RuntimeWorldManager.this.server);
+            RemoveFromRegistry.remove(dimensionsRegistry, dimensionKey.getValue());
         }
     }
 

@@ -4,6 +4,9 @@ import net.bennyboops.modid.block.entity.SuitcaseBlockEntity;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.entity.BlockEntity;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.LoreComponent;
+import net.minecraft.component.type.NbtComponent;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
@@ -95,42 +98,40 @@ public class PocketPortalBlock extends Block {
     }
 
     private boolean isSuitcaseItemWithKeystone(ItemStack stack, String keystoneName) {
-        if (stack.isEmpty() || !(stack.getItem() instanceof BlockItem) ||
-                !(((BlockItem) stack.getItem()).getBlock() instanceof SuitcaseBlock)) {
-            return false;
-        }
+        if (stack.isEmpty()
+                || !(stack.getItem() instanceof BlockItem bi)
+                || !(bi.getBlock() instanceof SuitcaseBlock)) return false;
 
-        if (!stack.hasNbt()) return false;
-        NbtCompound beTag = stack.getSubNbt("BlockEntityTag");
-        if (beTag == null) return false;
-
-        return beTag.contains("BoundKeystone") && keystoneName.equals(beTag.getString("BoundKeystone"));
+        NbtComponent beTag = stack.get(DataComponentTypes.BLOCK_ENTITY_DATA);
+        return beTag != null && keystoneName.equals(beTag.copyNbt().getString("BoundKeystone"));
     }
 
     private void cleanUpSuitcaseItemNbt(ItemStack stack, ServerPlayerEntity player, String keystoneName) {
-        if (!stack.hasNbt()) return;
-        NbtCompound beTag = stack.getSubNbt("BlockEntityTag");
-        if (beTag == null) return;
-        if (beTag.contains("EnteredPlayers", NbtElement.LIST_TYPE)) {
-            NbtList playersList = beTag.getList("EnteredPlayers", NbtElement.COMPOUND_TYPE);
-            NbtList newPlayersList = new NbtList();
-            boolean playerFound = false;
-            for (int i = 0; i < playersList.size(); i++) {
-                NbtCompound playerData = playersList.getCompound(i);
-                if (!player.getUuidAsString().equals(playerData.getString("UUID"))) {
-                    newPlayersList.add(playerData);
+        NbtComponent component = stack.get(DataComponentTypes.BLOCK_ENTITY_DATA);
+        if (component == null) return;
+        NbtElement raw = component.copyNbt();
+        if (!(raw instanceof NbtCompound tag)) return;
+        if (tag.contains("EnteredPlayers", NbtElement.LIST_TYPE)) {
+            NbtList old  = tag.getList("EnteredPlayers", NbtElement.COMPOUND_TYPE);
+            NbtList kept = new NbtList();
+            boolean removed = false;
+            for (int i = 0; i < old.size(); i++) {
+                NbtCompound entry = old.getCompound(i);
+                if (player.getUuidAsString().equals(entry.getString("UUID"))) {
+                    removed = true;
                 } else {
-                    playerFound = true;
+                    kept.add(entry);
                 }
             }
-            if (playerFound) {
-                beTag.put("EnteredPlayers", newPlayersList);
-                int remainingPlayers = newPlayersList.size();
-                updateItemLore(stack, remainingPlayers);
+
+            if (removed) {
+                tag.put("EnteredPlayers", kept);
+                updateItemLore(stack, kept.size());
+                stack.set(DataComponentTypes.BLOCK_ENTITY_DATA, NbtComponent.of(tag));
             }
         }
-        SuitcaseBlockEntity.removeSuitcaseEntry(keystoneName, player.getUuidAsString(), player.getServer()
-        );
+        SuitcaseBlockEntity.removeSuitcaseEntry(
+                keystoneName, player.getUuidAsString(), player.getServer());
     }
 
     @Override
@@ -242,14 +243,8 @@ public class PocketPortalBlock extends Block {
                             new Box(chunk.getPos().getStartX(), 0, chunk.getPos().getStartZ(),
                                     chunk.getPos().getEndX(), 256, chunk.getPos().getEndZ()),
                             itemEntity -> {
-                                ItemStack stack = itemEntity.getStack();
-                                if (!stack.hasNbt()) return false;
-
-                                NbtCompound beTag = stack.getSubNbt("BlockEntityTag");
-                                if (beTag == null) return false;
-
-                                return beTag.contains("BoundKeystone") &&
-                                        keystoneName.equals(beTag.getString("BoundKeystone"));
+                                NbtComponent tag = itemEntity.getStack().get(DataComponentTypes.BLOCK_ENTITY_DATA);
+                                return tag != null && keystoneName.equals(tag.getNbt().getString("BoundKeystone"));
                             }
                     );
                     if (!itemEntities.isEmpty()) {
@@ -293,50 +288,52 @@ public class PocketPortalBlock extends Block {
 
     private void cleanUpSuitcaseItemNbt(ItemEntity suitcaseItem, ServerPlayerEntity player, String keystoneName) {
         ItemStack stack = suitcaseItem.getStack();
-        if (!stack.hasNbt()) return;
-        NbtCompound beTag = stack.getSubNbt("BlockEntityTag");
-        if (beTag == null) return;
-        if (beTag.contains("EnteredPlayers", NbtElement.LIST_TYPE)) {
-            NbtList playersList = beTag.getList("EnteredPlayers", NbtElement.COMPOUND_TYPE);
-            NbtList newPlayersList = new NbtList();
-            boolean playerFound = false;
-            for (int i = 0; i < playersList.size(); i++) {
-                NbtCompound playerData = playersList.getCompound(i);
-                if (!player.getUuidAsString().equals(playerData.getString("UUID"))) {
-                    newPlayersList.add(playerData);
+        NbtComponent component = stack.get(DataComponentTypes.BLOCK_ENTITY_DATA);
+        if (component == null) return;
+        NbtElement raw = component.copyNbt();
+        if (!(raw instanceof NbtCompound tag)) return;
+        if (tag.contains("EnteredPlayers", NbtElement.LIST_TYPE)) {
+            NbtList old = tag.getList("EnteredPlayers", NbtElement.COMPOUND_TYPE);
+            NbtList kept = new NbtList();
+            boolean removed = false;
+            for (int i = 0; i < old.size(); i++) {
+                NbtCompound entry = old.getCompound(i);
+                if (player.getUuidAsString().equals(entry.getString("UUID"))) {
+                    removed = true;
                 } else {
-                    playerFound = true;
+                    kept.add(entry);
                 }
             }
-            if (playerFound) {
-                beTag.put("EnteredPlayers", newPlayersList);
-                int remainingPlayers = newPlayersList.size();
-                updateItemLore(stack, remainingPlayers);
+            if (removed) {
+                tag.put("EnteredPlayers", kept);
+                updateItemLore(stack, kept.size());
+                stack.set(DataComponentTypes.BLOCK_ENTITY_DATA, NbtComponent.of(tag));
                 suitcaseItem.setStack(stack);
             }
         }
-        SuitcaseBlockEntity.removeSuitcaseEntry(keystoneName, player.getUuidAsString(), player.getServer());
+        SuitcaseBlockEntity.removeSuitcaseEntry(
+                keystoneName, player.getUuidAsString(), player.getServer());
     }
 
     private void updateItemLore(ItemStack stack, int playerCount) {
-        if (stack.hasNbt() && stack.getNbt().contains("display")) {
-            NbtCompound display = stack.getSubNbt("display");
-            if (display != null && display.contains("Lore")) {
-                NbtList lore = display.getList("Lore", NbtElement.STRING_TYPE);
-                NbtList newLore = new NbtList();
-                for (int i = 0; i < lore.size(); i++) {
-                    String loreStr = lore.getString(i);
-                    if (!loreStr.contains("traveler")) {
-                        newLore.add(lore.get(i));
-                    }
-                }
-                if (playerCount > 0) {
-                    Text warningText = Text.literal("§c⚠ Contains " + playerCount + " traveler(s)!")
-                            .formatted(Formatting.RED);
-                    newLore.add(0, NbtString.of(Text.Serializer.toJson(warningText)));
-                }
-                display.put("Lore", newLore);
+        List<Text> lines = new java.util.ArrayList<>();
+
+        LoreComponent existing = stack.get(DataComponentTypes.LORE);
+        if (existing != null) {
+            for (Text t : existing.lines()) {
+                if (!t.getString().contains("traveler")) lines.add(t);
             }
+        }
+
+        if (playerCount > 0) {
+            lines.add(0, Text.literal("⚠ Contains " + playerCount + " traveler(s)!")
+                    .formatted(Formatting.RED));
+        }
+
+        if (lines.isEmpty()) {
+            stack.remove(DataComponentTypes.LORE);
+        } else {
+            stack.set(DataComponentTypes.LORE, new LoreComponent(lines));
         }
     }
 }

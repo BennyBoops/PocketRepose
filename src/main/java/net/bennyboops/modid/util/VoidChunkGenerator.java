@@ -1,19 +1,18 @@
 package net.bennyboops.modid.util;
 
 import com.mojang.datafixers.util.Pair;
-import com.mojang.serialization.Codec;
+import com.mojang.serialization.MapCodec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.block.BlockState;
 import net.minecraft.entity.SpawnGroup;
-import net.minecraft.registry.DynamicRegistryManager;
-import net.minecraft.registry.Registry;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryWrapper;
+import net.minecraft.registry.*;
 import net.minecraft.registry.entry.RegistryEntry;
 import net.minecraft.registry.entry.RegistryEntryList;
 import net.minecraft.server.world.ServerWorld;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.structure.StructureSet;
 import net.minecraft.structure.StructureTemplateManager;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.collection.Pool;
 import net.minecraft.util.dynamic.CodecHolder;
 import net.minecraft.util.math.BlockPos;
@@ -42,16 +41,13 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Executor;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 public class VoidChunkGenerator extends ChunkGenerator {
-    public static final Codec<VoidChunkGenerator> CODEC = RecordCodecBuilder.create(instance -> {
-        return instance.group(
-                Biome.REGISTRY_CODEC.stable().fieldOf("biome").forGetter(g -> g.biome)
-        ).apply(instance, instance.stable(VoidChunkGenerator::new));
-    });
+    public static final MapCodec<VoidChunkGenerator> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
+            Biome.REGISTRY_CODEC.stable().fieldOf("biome").forGetter(VoidChunkGenerator::getBiome)
+    ).apply(instance, instance.stable(VoidChunkGenerator::new)));
 
     private static final VerticalBlockSample EMPTY_SAMPLE = new VerticalBlockSample(0, new BlockState[0]);
 
@@ -83,7 +79,7 @@ public class VoidChunkGenerator extends ChunkGenerator {
 
         @Override
         public CodecHolder<? extends DensityFunction> getCodecHolder() {
-            return CodecHolder.of(Codec.unit(this));
+            return CodecHolder.of(MapCodec.unit(this));
         }
     };
 
@@ -104,12 +100,31 @@ public class VoidChunkGenerator extends ChunkGenerator {
     }
 
     public VoidChunkGenerator(Registry<Biome> biomeRegistry, RegistryKey<Biome> biome) {
-        this(biomeRegistry.getEntry(biome).get());
+        this(biomeRegistry.getEntry(biome).orElseThrow());
+    }
+
+    // Create an empty (void) world!
+    public VoidChunkGenerator(MinecraftServer server) {
+        this(server.getRegistryManager().get(RegistryKeys.BIOME), BiomeKeys.THE_VOID);
+    }
+
+    // Create a world with a given Biome (as an ID)
+    public VoidChunkGenerator(MinecraftServer server, Identifier biome) {
+        this(server, RegistryKey.of(RegistryKeys.BIOME, biome));
+    }
+
+    // Create a world with a given Biome (as a RegistryKey)
+    public VoidChunkGenerator(MinecraftServer server, RegistryKey<Biome> biome) {
+        this(server.getRegistryManager().get(RegistryKeys.BIOME), biome);
     }
 
     @Override
-    protected Codec<? extends ChunkGenerator> getCodec() {
+    protected MapCodec<? extends ChunkGenerator> getCodec() {
         return CODEC;
+    }
+
+    protected RegistryEntry<Biome> getBiome() {
+        return this.biome;
     }
 
     @Override
@@ -122,7 +137,7 @@ public class VoidChunkGenerator extends ChunkGenerator {
     }
 
     @Override
-    public CompletableFuture<Chunk> populateNoise(Executor executor, Blender blender, NoiseConfig noiseConfig, StructureAccessor structureAccessor, Chunk chunk) {
+    public CompletableFuture<Chunk> populateNoise(Blender blender, NoiseConfig noiseConfig, StructureAccessor structureAccessor, Chunk chunk) {
         return CompletableFuture.completedFuture(chunk);
     }
 

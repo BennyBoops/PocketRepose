@@ -14,13 +14,17 @@ import net.minecraft.world.gen.StructureAccessor;
 import net.minecraft.registry.Registry;
 import net.minecraft.registry.RegistryKey;
 import net.bennyboops.modid.util.VoidChunkGenerator;
+import net.minecraft.world.gen.chunk.Blender;
+import net.minecraft.world.gen.noise.NoiseConfig;
+
+import java.util.concurrent.CompletableFuture;
 
 public class PortalChunkGenerator extends VoidChunkGenerator {
     private final BlockState portalState = ModBlocks.PORTAL.getDefaultState();
 
     public PortalChunkGenerator(Registry<Biome> biomeRegistry) {
         super(biomeRegistry,
-                RegistryKey.of(RegistryKeys.BIOME, new Identifier("pocket-repose", "pocket_islands")));
+                RegistryKey.of(RegistryKeys.BIOME, Identifier.of("pocket-repose", "pocket_islands")));
     }
 
     @Override
@@ -42,5 +46,10 @@ public class PortalChunkGenerator extends VoidChunkGenerator {
                 }
             }
         }
+    }
+
+    @Override
+    public CompletableFuture<Chunk> populateNoise(Blender blender, NoiseConfig noiseConfig, StructureAccessor structureAccessor, Chunk chunk) {
+        return null;
     }
 }

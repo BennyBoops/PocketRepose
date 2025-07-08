@@ -15,14 +15,13 @@ import net.bennyboops.modid.data.SuitcaseRegistrySavedData;
 import net.bennyboops.modid.item.KeystoneItem;
 import net.bennyboops.modid.item.ModItemGroups;
 import net.bennyboops.modid.item.ModItems;
+import net.bennyboops.modid.util.VoidChunkGenerator;
 import net.bennyboops.modid.world.PortalChunkGenerator;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
-import net.fabricmc.fabric.api.dimension.v1.FabricDimensions;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
 import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
-import net.minecraft.advancement.criterion.Criteria;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.entity.EntityType;
@@ -33,10 +32,8 @@ import net.minecraft.item.BlockItem;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.nbt.NbtCompound;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.Registry;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
+import net.minecraft.nbt.NbtElement;
+import net.minecraft.registry.*;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
 import net.minecraft.server.world.ServerWorld;
@@ -65,24 +62,36 @@ import java.util.Set;
 public class PocketRepose implements ModInitializer {
 
 	public static final Identifier POCKET_DIMENSION_TYPE_ID =
-			new Identifier("pocket-repose", "pocket_dimension_type");
+			Identifier.of("pocket-repose", "pocket_dimension_type");
 	public static final RegistryKey<DimensionType> POCKET_DIMENSION_TYPE_KEY =
 			RegistryKey.of(RegistryKeys.DIMENSION_TYPE, POCKET_DIMENSION_TYPE_ID);
 	public static final String MOD_ID = "pocket-repose";
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
-	public static final EnterPocketDimensionCriterion ENTER_POCKET_DIMENSION = new EnterPocketDimensionCriterion();
-
+	public static final EnterPocketDimensionCriterion ENTER_POCKET_DIMENSION =
+			Registry.register(
+					Registries.CRITERION,
+					Identifier.of(PocketRepose.MOD_ID, "enter_pocket_dimension"),
+					new EnterPocketDimensionCriterion()
+			);
 
 	@Override
 	public void onInitialize() {
 
 		LOGGER.info("Initializing " + MOD_ID);
 
+
+		Registry.register(Registries.CHUNK_GENERATOR,
+				Identifier.of("pocket-repose", "void_chunk_generator"),
+				VoidChunkGenerator.CODEC);
+
+		Registry.register(Registries.CHUNK_GENERATOR,
+				Identifier.of("pocket-repose", "portal_chunk_generator"),
+				PortalChunkGenerator.CODEC);
+
+
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
 			SuitcaseRegistrySavedData.onServerStart(server);
 		});
-
-		Criteria.register(ENTER_POCKET_DIMENSION);
 
 		registerPocketCommands();
 		registerSuitcaseMobTeleport();
@@ -107,12 +116,12 @@ public class PocketRepose implements ModInitializer {
 			}
 			Registry<Biome> biomeRegistry = server.getRegistryManager().get(RegistryKeys.BIOME);
 			RegistryKey<Biome> voidBiomeKey =
-					RegistryKey.of(RegistryKeys.BIOME, new Identifier("pocket-repose", "pocket_islands"));
+					RegistryKey.of(RegistryKeys.BIOME, Identifier.of("pocket-repose", "pocket_islands"));
 
 			long seed = server.getOverworld().getSeed();
 			try {
 				for (String dimName : Files.readAllLines(registryFile)) {
-					Identifier worldId = new Identifier("pocket-repose", dimName);
+					Identifier worldId = Identifier.of("pocket-repose", dimName);
 
 					ChunkGenerator voidGen = new PortalChunkGenerator(biomeRegistry);
 
@@ -159,7 +168,7 @@ public class PocketRepose implements ModInitializer {
 
 
 	public static final RegistryKey<Biome> VOID_BIOME_KEY =
-			RegistryKey.of(RegistryKeys.BIOME, new Identifier("pocket-repose", "pocket_islands"));
+			RegistryKey.of(RegistryKeys.BIOME, Identifier.of("pocket-repose", "pocket_islands"));
 
 
 	private void registerPocketCommands() {
@@ -281,7 +290,7 @@ public class PocketRepose implements ModInitializer {
 														String entityString = StringArgumentType.getString(ctx, "entity");
 
 														try {
-															Identifier entityId = new Identifier(entityString);
+															Identifier entityId = Identifier.of(entityString);
 															EntityType<?> entityType = Registries.ENTITY_TYPE.get(entityId);
 
 															if (entityType == EntityType.PIG && !entityString.equals("minecraft:pig")) {
@@ -315,7 +324,7 @@ public class PocketRepose implements ModInitializer {
 														String entityString = StringArgumentType.getString(ctx, "entity");
 
 														try {
-															Identifier entityId = new Identifier(entityString);
+															Identifier entityId = Identifier.of(entityString);
 															EntityType<?> entityType = Registries.ENTITY_TYPE.get(entityId);
 
 															if (entityType == EntityType.PIG && !entityString.equals("minecraft:pig")) {
@@ -381,7 +390,7 @@ public class PocketRepose implements ModInitializer {
 	private int resetPocketDimension(CommandContext<ServerCommandSource> ctx, String dimSuffix) {
 		ServerCommandSource src = ctx.getSource();
 
-		Identifier dimId = new Identifier("pocket-repose", "pocket_dimension_" + dimSuffix);
+		Identifier dimId = Identifier.of("pocket-repose", "pocket_dimension_" + dimSuffix);
 		RegistryKey<World> worldKey = RegistryKey.of(RegistryKeys.WORLD, dimId);
 		ServerWorld targetWorld = src.getServer().getWorld(worldKey);
 
@@ -522,7 +531,13 @@ public class PocketRepose implements ModInitializer {
 			if (!(heldBlock instanceof SuitcaseBlock)) {
 				return ActionResult.PASS;
 			}
-			NbtCompound beNbt = stack.getSubNbt("BlockEntityTag");
+			RegistryWrapper.WrapperLookup regs = ((ServerWorld)world).getRegistryManager();
+			NbtElement elem = stack.encode(regs);
+			if (!(elem instanceof NbtCompound root) || !root.contains("BlockEntityTag")) {
+				return ActionResult.FAIL;
+			}
+			NbtCompound beNbt = root.getCompound("BlockEntityTag");
+
 			if (beNbt == null || !beNbt.contains("BoundKeystone")) {
 				player.sendMessage(Text.literal("§c☒"), true);
 				world.playSound(
@@ -546,7 +561,7 @@ public class PocketRepose implements ModInitializer {
 				return ActionResult.FAIL;
 			}
 			String keystone = beNbt.getString("BoundKeystone");
-			Identifier dimId = new Identifier("pocket-repose", "pocket_dimension_" + keystone);
+			Identifier dimId = Identifier.of("pocket-repose", "pocket_dimension_" + keystone);
 			RegistryKey<World> dimKey = RegistryKey.of(RegistryKeys.WORLD, dimId);
 			ServerWorld targetWorld = world.getServer().getWorld(dimKey);
 			if (targetWorld == null) {
@@ -584,10 +599,21 @@ public class PocketRepose implements ModInitializer {
 			Vec3d dest   = data.getEntryPos();
 			float yaw    = data.getEntryYaw();
 			float pitch  = data.getEntryPitch();
-			TeleportTarget tpTarget = new TeleportTarget(
-					dest, Vec3d.ZERO, yaw, pitch
+
+
+
+			TeleportTarget target = new TeleportTarget(
+					targetWorld,            // a ServerWorld
+					dest,                   // destination position
+					Vec3d.ZERO,             // velocity
+					yaw,                    // yaw
+					pitch,                  // pitch
+					TeleportTarget.NO_OP
 			);
-			FabricDimensions.teleport(mob, targetWorld, tpTarget);
+
+
+
+			player.teleportTo(target);
 			world.playSound(
 					null,
 					player.getX(), player.getY(), player.getZ(),
@@ -644,8 +670,18 @@ public class PocketRepose implements ModInitializer {
 			);
 			float yaw   = mob.getYaw();
 			float pitch = mob.getPitch();
-			TeleportTarget tpTarget = new TeleportTarget(exitPos, Vec3d.ZERO, yaw, pitch);
-			FabricDimensions.teleport(mob, overworld, tpTarget);
+
+			TeleportTarget tpTarget = new TeleportTarget(
+					overworld,
+					exitPos,
+					Vec3d.ZERO,
+					yaw,
+					pitch,
+					TeleportTarget.NO_OP
+			);
+
+			player.teleportTo(tpTarget);
+
 			overworld.playSound(
 					null,
 					exitPos.x, exitPos.y, exitPos.z,

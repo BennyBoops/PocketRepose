@@ -11,6 +11,7 @@ import net.minecraft.network.listener.ClientPlayPacketListener;
 import net.minecraft.network.packet.Packet;
 import net.minecraft.network.packet.s2c.play.BlockEntityUpdateS2CPacket;
 import net.minecraft.registry.RegistryKey;
+import net.minecraft.registry.RegistryWrapper;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.math.BlockPos;
@@ -161,50 +162,45 @@ public class SuitcaseBlockEntity extends BlockEntity {
     }
 
     @Override
-    protected void writeNbt(NbtCompound nbt) {
-        if (boundKeystoneName != null) {
-            nbt.putString("BoundKeystone", boundKeystoneName);
-        }
-        nbt.putBoolean("Locked", isLocked);
-        nbt.putBoolean("DimensionLocked", dimensionLocked);
+    protected void writeNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup registry) {
+        if (boundKeystoneName != null) nbt.putString("BoundKeystone", boundKeystoneName);
 
-        NbtList playersList = new NbtList();
-        for (EnteredPlayerData data : enteredPlayers) {
-            playersList.add(data.toNbt());
-        }
-        nbt.put("EnteredPlayers", playersList);
+        nbt.putBoolean("Locked",           isLocked);
+        nbt.putBoolean("DimensionLocked",  dimensionLocked);
 
-        super.writeNbt(nbt);
+        NbtList players = new NbtList();
+        for (EnteredPlayerData data : enteredPlayers) players.add(data.toNbt());
+        nbt.put("EnteredPlayers", players);
+
+        // ALWAYS call super with the *same* signature
+        super.writeNbt(nbt, registry);
     }
 
     @Override
-    public void readNbt(NbtCompound nbt) {
-        super.readNbt(nbt);
-        if (nbt.contains("BoundKeystone")) {
-            boundKeystoneName = nbt.getString("BoundKeystone");
-        }
-        isLocked = nbt.getBoolean("Locked");
-        dimensionLocked = !nbt.contains("DimensionLocked") || nbt.getBoolean("DimensionLocked");
+    public void readNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup registry) {
+        super.readNbt(nbt, registry);
+
+        boundKeystoneName = nbt.contains("BoundKeystone") ? nbt.getString("BoundKeystone") : null;
+        isLocked          = nbt.getBoolean("Locked");
+        dimensionLocked   = !nbt.contains("DimensionLocked") || nbt.getBoolean("DimensionLocked");
+
         enteredPlayers.clear();
         if (nbt.contains("EnteredPlayers", NbtElement.LIST_TYPE)) {
-            NbtList playersList = nbt.getList("EnteredPlayers", NbtElement.COMPOUND_TYPE);
-            for (NbtElement element : playersList) {
-                enteredPlayers.add(EnteredPlayerData.fromNbt((NbtCompound) element));
+            for (NbtElement e : nbt.getList("EnteredPlayers", NbtElement.COMPOUND_TYPE)) {
+                enteredPlayers.add(EnteredPlayerData.fromNbt((NbtCompound) e));
             }
         }
     }
 
     @Nullable
-    @Override
-    public Packet<ClientPlayPacketListener> toUpdatePacket() {
+    public Packet<ClientPlayPacketListener> toUpdatePacket(RegistryWrapper.WrapperLookup registry) {
         return BlockEntityUpdateS2CPacket.create(this);
     }
 
     @Override
-    public NbtCompound toInitialChunkDataNbt() {
-        NbtCompound nbt = new NbtCompound();
-        writeNbt(nbt);
-        return nbt;
+    public NbtCompound toInitialChunkDataNbt(RegistryWrapper.WrapperLookup registry) {
+        // helper provided by BlockEntity to include the type ID
+        return createNbtWithId(registry);
     }
 
     public static final Map<String, Map<String, BlockPos>> SUITCASE_REGISTRY = Collections.synchronizedMap(new HashMap<>());
