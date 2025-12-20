@@ -1,5 +1,6 @@
 {
   "type": "minecraft:crafting_shaped",
+  "category": "misc",
   "pattern": [
     "GNG",
     "NTN",
@@ -17,7 +18,7 @@
     }
   },
   "result": {
-    "item": "pocket-repose:keystone",
+    "id": "pocket-repose:keystone",
     "count": 1
   }
 }

@@ -18,7 +18,7 @@ import java.util.Map;
 
 public class SuitcaseRegistrySavedData extends PersistentState {
 
-    public static final String DATA_NAME = "pocket-repose:suitcase_registry";
+    public static final String DATA_NAME = "pocket_repose_suitcase_registry";
 
     public static final Type<SuitcaseRegistrySavedData> TYPE = new Type<>(
             SuitcaseRegistrySavedData::new,

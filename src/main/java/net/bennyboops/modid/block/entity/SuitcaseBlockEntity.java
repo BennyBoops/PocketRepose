@@ -14,6 +14,7 @@ import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryWrapper;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.world.World;
 import org.jetbrains.annotations.Nullable;
@@ -24,6 +25,7 @@ public class SuitcaseBlockEntity extends BlockEntity {
     private boolean isLocked = false;
     private boolean dimensionLocked = true;
     private final List<EnteredPlayerData> enteredPlayers = new ArrayList<>();
+
     public static class EnteredPlayerData {
         public final String uuid;
         public final double x;
@@ -112,6 +114,7 @@ public class SuitcaseBlockEntity extends BlockEntity {
         Map<String, BlockPos> suitcases = SUITCASE_REGISTRY.computeIfAbsent(
                 boundKeystoneName, k -> new HashMap<>()
         );
+
         suitcases.put(player.getUuidAsString(), this.getPos());
 
         PocketPortalBlock.storePlayerPosition(player);

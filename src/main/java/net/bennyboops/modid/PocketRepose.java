@@ -17,6 +17,7 @@ import net.bennyboops.modid.item.ModItemGroups;
 import net.bennyboops.modid.item.ModItems;
 import net.bennyboops.modid.util.VoidChunkGenerator;
 import net.bennyboops.modid.world.PortalChunkGenerator;
+import net.bennyboops.modid.world.PortalChunkHandler;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
@@ -24,6 +25,9 @@ import net.fabricmc.fabric.api.event.player.UseEntityCallback;
 import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
+import net.minecraft.component.DataComponentTypes;
+import net.minecraft.component.type.NbtComponent;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.mob.*;
@@ -103,6 +107,10 @@ public class PocketRepose implements ModInitializer {
 		ModBlocks.registerModBlocks();
 		ModItemGroups.registerItemGroups();
 		ModBlockEntities.registerBlockEntities();
+
+		PortalChunkHandler.initialize();
+
+
 
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
 			Path registryFile = server.getSavePath(WorldSavePath.ROOT)
@@ -523,23 +531,29 @@ public class PocketRepose implements ModInitializer {
 	private void registerSuitcaseMobTeleport() {
 		UseEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
 			if (world.isClient) return ActionResult.PASS;
+
+			// Only process main hand
+			if (hand != Hand.MAIN_HAND) {
+				return ActionResult.PASS;
+			}
+
 			ItemStack stack = player.getStackInHand(hand);
+
 			if (!(stack.getItem() instanceof BlockItem bi)) {
 				return ActionResult.PASS;
 			}
+
 			Block heldBlock = bi.getBlock();
+
 			if (!(heldBlock instanceof SuitcaseBlock)) {
 				return ActionResult.PASS;
 			}
-			RegistryWrapper.WrapperLookup regs = ((ServerWorld)world).getRegistryManager();
-			NbtElement elem = stack.encode(regs);
-			if (!(elem instanceof NbtCompound root) || !root.contains("BlockEntityTag")) {
-				return ActionResult.FAIL;
-			}
-			NbtCompound beNbt = root.getCompound("BlockEntityTag");
 
-			if (beNbt == null || !beNbt.contains("BoundKeystone")) {
-				player.sendMessage(Text.literal("§c☒"), true);
+			// Use the new component system
+			NbtComponent beData = stack.get(DataComponentTypes.BLOCK_ENTITY_DATA);
+
+			if (beData == null) {
+				player.sendMessage(Text.literal("☒"), true);
 				world.playSound(
 						null,
 						player.getX(), player.getY(), player.getZ(),
@@ -549,8 +563,23 @@ public class PocketRepose implements ModInitializer {
 				);
 				return ActionResult.FAIL;
 			}
+
+			NbtCompound beNbt = beData.copyNbt();
+
+			if (!beNbt.contains("BoundKeystone")) {
+				player.sendMessage(Text.literal("☒"), true);
+				world.playSound(
+						null,
+						player.getX(), player.getY(), player.getZ(),
+						SoundEvents.ENTITY_ZOMBIE_ATTACK_WOODEN_DOOR,
+						SoundCategory.PLAYERS,
+						0.3f, 1.5f
+				);
+				return ActionResult.FAIL;
+			}
+
 			if (beNbt.getBoolean("Locked")) {
-				player.sendMessage(Text.literal("§c☒"), true);
+				player.sendMessage(Text.literal("☒"), true);
 				world.playSound(
 						null,
 						player.getX(), player.getY(), player.getZ(),
@@ -560,20 +589,24 @@ public class PocketRepose implements ModInitializer {
 				);
 				return ActionResult.FAIL;
 			}
+
 			String keystone = beNbt.getString("BoundKeystone");
 			Identifier dimId = Identifier.of("pocket-repose", "pocket_dimension_" + keystone);
 			RegistryKey<World> dimKey = RegistryKey.of(RegistryKeys.WORLD, dimId);
 			ServerWorld targetWorld = world.getServer().getWorld(dimKey);
+
 			if (targetWorld == null) {
 				player.sendMessage(Text.literal("§cPocket dimension not found"), true);
 				return ActionResult.FAIL;
 			}
+
 			if (!(entity instanceof LivingEntity mob)) {
 				return ActionResult.PASS;
 			}
+
 			// Check if mob is blacklisted
 			if (isBlacklisted(mob.getType())) {
-				player.sendMessage(Text.literal("§c☒"), true);
+				player.sendMessage(Text.literal("☒"), true);
 				world.playSound(
 						null,
 						player.getX(), player.getY(), player.getZ(),
@@ -583,9 +616,10 @@ public class PocketRepose implements ModInitializer {
 				);
 				return ActionResult.FAIL;
 			}
+
 			// Check if mob is hostile and if hostile capture is disabled
 			if (!canCaptureHostile && isHostileMob(mob)) {
-				player.sendMessage(Text.literal("§c☒"), true);
+				player.sendMessage(Text.literal("☒"), true);
 				world.playSound(
 						null,
 						player.getX(), player.getY(), player.getZ(),
@@ -595,25 +629,24 @@ public class PocketRepose implements ModInitializer {
 				);
 				return ActionResult.FAIL;
 			}
+
 			MobEntryData data = MobEntryData.get(targetWorld);
-			Vec3d dest   = data.getEntryPos();
-			float yaw    = data.getEntryYaw();
-			float pitch  = data.getEntryPitch();
+			Vec3d dest = data.getEntryPos();
+			float yaw = data.getEntryYaw();
+			float pitch = data.getEntryPitch();
 
-
-
+			// Teleport the mob
 			TeleportTarget target = new TeleportTarget(
-					targetWorld,            // a ServerWorld
-					dest,                   // destination position
-					Vec3d.ZERO,             // velocity
-					yaw,                    // yaw
-					pitch,                  // pitch
+					targetWorld,
+					dest,
+					Vec3d.ZERO,
+					yaw,
+					pitch,
 					TeleportTarget.NO_OP
 			);
 
+			mob.teleportTo(target);
 
-
-			player.teleportTo(target);
 			world.playSound(
 					null,
 					player.getX(), player.getY(), player.getZ(),
@@ -621,6 +654,7 @@ public class PocketRepose implements ModInitializer {
 					SoundCategory.PLAYERS,
 					2.0f, 1.0f
 			);
+
 			world.playSound(
 					null,
 					player.getX(), player.getY(), player.getZ(),
@@ -628,6 +662,7 @@ public class PocketRepose implements ModInitializer {
 					SoundCategory.PLAYERS,
 					0.5f, 1.0f
 			);
+
 			return ActionResult.SUCCESS;
 		});
 	}
@@ -637,41 +672,52 @@ public class PocketRepose implements ModInitializer {
 			if (world.isClient) {
 				return ActionResult.PASS;
 			}
+
 			ItemStack held = player.getStackInHand(hand);
 			if (!(held.getItem() instanceof KeystoneItem)) {
 				return ActionResult.PASS;
 			}
+
+			// Check if we're in a pocket dimension
 			Identifier dimId = world.getRegistryKey().getValue();
 			String namespace = dimId.getNamespace();
-			String path      = dimId.getPath();
-			String prefix    = "pocket_dimension_";
+			String path = dimId.getPath();
+			String prefix = "pocket_dimension_";
+
 			if (!namespace.equals("pocket-repose") || !path.startsWith(prefix)) {
 				return ActionResult.PASS;
 			}
+
 			String keystoneName = path.substring(prefix.length());
+
 			if (!(entity instanceof LivingEntity mob)) {
 				return ActionResult.PASS;
 			}
+
 			String playerUuid = player.getUuidAsString();
 			BlockPos suitcasePos = SuitcaseBlockEntity.findSuitcasePosition(keystoneName, playerUuid);
+
 			if (suitcasePos == null) {
 				player.sendMessage(Text.literal("§cNo suitcase found"), true);
 				return ActionResult.FAIL;
 			}
+
 			ServerWorld overworld = world.getServer().getWorld(World.OVERWORLD);
 			if (overworld == null) {
 				player.sendMessage(Text.literal("§cOverworld is not loaded"), true);
 				return ActionResult.FAIL;
 			}
+
 			Vec3d exitPos = new Vec3d(
 					suitcasePos.getX() + 0.5,
-					suitcasePos.getY() + 0.5,
+					suitcasePos.getY() + 1.0,
 					suitcasePos.getZ() + 0.5
 			);
-			float yaw   = mob.getYaw();
+			float yaw = mob.getYaw();
 			float pitch = mob.getPitch();
 
-			TeleportTarget tpTarget = new TeleportTarget(
+			// Teleport only the mob to overworld
+			TeleportTarget mobTarget = new TeleportTarget(
 					overworld,
 					exitPos,
 					Vec3d.ZERO,
@@ -680,8 +726,9 @@ public class PocketRepose implements ModInitializer {
 					TeleportTarget.NO_OP
 			);
 
-			player.teleportTo(tpTarget);
+			mob.teleportTo(mobTarget);
 
+			// Play sounds
 			overworld.playSound(
 					null,
 					exitPos.x, exitPos.y, exitPos.z,
@@ -689,6 +736,7 @@ public class PocketRepose implements ModInitializer {
 					SoundCategory.PLAYERS,
 					2.0f, 1.0f
 			);
+
 			world.playSound(
 					null,
 					player.getX(), player.getY(), player.getZ(),

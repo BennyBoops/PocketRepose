@@ -1,5 +1,6 @@
 {
   "type": "minecraft:crafting_shaped",
+  "category": "misc",
   "pattern": [
     "GGG",
     "GCG",
@@ -17,7 +18,7 @@
     }
   },
   "result": {
-    "item": "pocket-repose:suitcase",
+    "id": "pocket-repose:suitcase",
     "count": 1
   }
 }

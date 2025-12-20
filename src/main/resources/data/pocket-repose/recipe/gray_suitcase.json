@@ -1,5 +1,6 @@
 {
-  "type": "crafting_shapeless",
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
   "ingredients": [
     {
       "item": "minecraft:gray_dye"
@@ -9,7 +10,7 @@
     }
   ],
   "result": {
-    "item": "pocket-repose:gray_suitcase",
+    "id": "pocket-repose:gray_suitcase",
     "count": 1
   }
 }

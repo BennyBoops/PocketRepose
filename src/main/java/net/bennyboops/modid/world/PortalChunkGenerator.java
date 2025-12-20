@@ -1,12 +1,12 @@
 package net.bennyboops.modid.world;
 
 import net.bennyboops.modid.block.ModBlocks;
-import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.world.ChunkRegion;
 import net.minecraft.world.StructureWorldAccess;
 import net.minecraft.world.biome.Biome;
 import net.minecraft.world.chunk.Chunk;
@@ -28,28 +28,72 @@ public class PortalChunkGenerator extends VoidChunkGenerator {
     }
 
     @Override
-    public void generateFeatures(
-            StructureWorldAccess world,
-            Chunk chunk,
-            StructureAccessor structureAccessor
-    ) {
-        super.generateFeatures(world, chunk, structureAccessor);
+    public CompletableFuture<Chunk> populateNoise(Blender blender, NoiseConfig noiseConfig,
+                                                  StructureAccessor accessor, Chunk chunk) {
+        return CompletableFuture.completedFuture(chunk);
+    }
 
+    @Override
+    public void buildSurface(ChunkRegion region, StructureAccessor structures,
+                             NoiseConfig noiseConfig, Chunk chunk) {
         ChunkPos chunkPos = chunk.getPos();
+
         for (int dy = -64; dy <= -61; dy++) {
             for (int dx = 0; dx < 16; dx++) {
                 for (int dz = 0; dz < 16; dz++) {
                     int worldX = (chunkPos.x << 4) + dx;
                     int worldZ = (chunkPos.z << 4) + dz;
                     BlockPos blockPos = new BlockPos(worldX, dy, worldZ);
-                    world.setBlockState(blockPos, portalState, Block.NOTIFY_LISTENERS);
+
+                    chunk.setBlockState(blockPos, portalState, false);
                 }
             }
         }
     }
+}
+
+
+
+
+
+
+
+
+
+
+
+    /**
+    @Override
+    public CompletableFuture<Chunk> populateNoise(Blender blender, NoiseConfig noiseConfig, StructureAccessor accessor, Chunk chunk) {
+        // Move portal generation to populateNoise instead of generateFeatures
+        // This ensures portals are generated during initial chunk creation
+        ChunkPos chunkPos = chunk.getPos();
+
+        for (int dy = -64; dy <= -61; dy++) {
+            for (int dx = 0; dx < 16; dx++) {
+                for (int dz = 0; dz < 16; dz++) {
+                    int worldX = (chunkPos.x << 4) + dx;
+                    int worldZ = (chunkPos.z << 4) + dz;
+                    BlockPos blockPos = new BlockPos(worldX, dy, worldZ);
+
+                    // Set block state directly in the chunk during noise population
+                    chunk.setBlockState(blockPos, portalState, false);
+                }
+            }
+        }
+
+        return CompletableFuture.completedFuture(chunk);
+    }
 
     @Override
-    public CompletableFuture<Chunk> populateNoise(Blender blender, NoiseConfig noiseConfig, StructureAccessor structureAccessor, Chunk chunk) {
-        return null;
+    public void generateFeatures(
+            StructureWorldAccess world,
+            Chunk chunk,
+            StructureAccessor structureAccessor
+    ) {
+        super.generateFeatures(world, chunk, structureAccessor);
+        // Features generation is now empty since we moved portal generation to populateNoise
     }
 }
+
+     **/
