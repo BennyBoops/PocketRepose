@@ -4,6 +4,7 @@ import com.mojang.serialization.MapCodec;
 import net.bennyboops.modid.PocketRepose;
 import net.bennyboops.modid.block.entity.SuitcaseBlockEntity;
 import net.bennyboops.modid.data.PlayerEntryData;
+import net.bennyboops.modid.data.SuitcaseLocationTracker;
 import net.bennyboops.modid.item.KeystoneItem;
 import net.bennyboops.modid.world.Fantasy;
 import net.bennyboops.modid.world.PortalChunkGenerator;
@@ -17,7 +18,6 @@ import net.minecraft.component.type.NbtComponent;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.Item;
 import net.minecraft.item.ItemPlacementContext;
 import net.minecraft.item.ItemStack;
 import net.minecraft.loot.context.LootContextParameterSet;
@@ -51,11 +51,8 @@ import net.minecraft.world.gen.chunk.ChunkGenerator;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
-import java.util.logging.LogManager;
-import java.util.logging.Logger;
 
 public class SuitcaseBlock extends BlockWithEntity {
-    private static final Logger LOGGER = Logger.getLogger(SuitcaseBlock.class.getName());
 
     private static final String SUITCASE_BE_ID = "pocket-repose:suitcase";
     public static final BooleanProperty OPEN = BooleanProperty.of("open");
@@ -79,20 +76,35 @@ public class SuitcaseBlock extends BlockWithEntity {
     @Override
     public void onPlaced(World world, BlockPos pos, BlockState state, @Nullable LivingEntity placer, ItemStack stack) {
         super.onPlaced(world, pos, state, placer, stack);
-        if (!world.isClient) {
-            BlockEntity be = world.getBlockEntity(pos);
-            if (be instanceof SuitcaseBlockEntity suitcase) {
-                NbtComponent comp = stack.get(DataComponentTypes.BLOCK_ENTITY_DATA);
-                if (comp != null) {
-                    NbtCompound tag = comp.copyNbt();
-                    suitcase.readNbt(tag, world.getRegistryManager());
-                    String key = suitcase.getBoundKeystoneName();
-                    if (key != null) {
-                        for (SuitcaseBlockEntity.EnteredPlayerData p : suitcase.getEnteredPlayers()) {
-                            suitcase.updatePlayerSuitcasePosition(p.uuid, pos);
-                            SuitcaseBlockEntity.SUITCASE_REGISTRY.computeIfAbsent(key, k -> new HashMap<>()).put(p.uuid, pos);
-                        }
-                    }
+        if (world.isClient) return;
+
+        BlockEntity be = world.getBlockEntity(pos);
+        if (!(be instanceof SuitcaseBlockEntity suitcase)) return;
+
+        NbtComponent comp = stack.get(DataComponentTypes.BLOCK_ENTITY_DATA);
+        if (comp != null) {
+            NbtCompound tag = comp.copyNbt();
+            suitcase.readNbt(tag, world.getRegistryManager());
+        }
+
+        SuitcaseLocationTracker tracker = SuitcaseLocationTracker.get(world.getServer());
+        if (tracker != null) {
+            tracker.updateSuitcaseLocationFromBlock(
+                    suitcase.getSuitcaseId(),
+                    world.getRegistryKey().getValue().toString(),
+                    pos
+            );
+        }
+
+        String key = suitcase.getBoundKeystoneName();
+        if (key != null) {
+            SuitcaseLocationTracker t = SuitcaseLocationTracker.get(world.getServer());
+            if (t != null) {
+                for (SuitcaseBlockEntity.EnteredPlayerData p : suitcase.getEnteredPlayers()) {
+                    t.updateLocationFromBlock(key, p.uuid,
+                            world.getRegistryKey().getValue().toString(),
+                            suitcase.getSuitcaseId(),
+                            pos, p.yaw, 0f);
                 }
             }
         }
@@ -111,10 +123,12 @@ public class SuitcaseBlock extends BlockWithEntity {
                 if (key != null) {
                     NbtCompound beTag = new NbtCompound();
 
-                    beTag.putString("id", SUITCASE_BE_ID);        // <-- REQUIRED
-                    beTag.putString("BoundKeystone",   key);
-                    beTag.putBoolean("Locked",         suitcase.isLocked());
-                    beTag.putBoolean("DimensionLocked",suitcase.isDimensionLocked());
+                    beTag.putString("id", SUITCASE_BE_ID);
+                    beTag.putString("BoundKeystone", key);
+                    beTag.putBoolean("Locked", suitcase.isLocked());
+                    beTag.putBoolean("DimensionLocked", suitcase.isDimensionLocked());
+
+                    beTag.putUuid(SuitcaseBlockEntity.NBT_SUITCASE_ID, suitcase.getSuitcaseId());
 
                     NbtList entered = new NbtList();
                     for (SuitcaseBlockEntity.EnteredPlayerData d : suitcase.getEnteredPlayers())
@@ -123,14 +137,8 @@ public class SuitcaseBlock extends BlockWithEntity {
 
                     stack.set(DataComponentTypes.BLOCK_ENTITY_DATA, NbtComponent.of(beTag));
 
-                    /* optional lore (unchanged) */
                     List<Text> lore = new ArrayList<>();
-                    if (!suitcase.getEnteredPlayers().isEmpty())
-                        lore.add(Text.literal("⚠ Contains "
-                                        + suitcase.getEnteredPlayers().size() + " Traveler(s)!")
-                                .formatted(Formatting.RED));
-                    lore.add(Text.literal("Bound to: " + (suitcase.isLocked() ? "§k" : "")
-                                    + key.replace("_", " "))
+                    lore.add(Text.literal("Bound to: " + (suitcase.isLocked() ? "§k" : "") + key.replace("_", " "))
                             .formatted(Formatting.GRAY));
                     lore.add(Text.literal(suitcase.isLocked() ? "§cLocked" : "§aUnlocked")
                             .formatted(Formatting.GRAY));
@@ -143,19 +151,14 @@ public class SuitcaseBlock extends BlockWithEntity {
         }
     }
 
-
     private static String sanitize(ItemStack stack) {
-        String raw = Formatting.strip(stack.getName().getString());     // remove §x
-        return raw.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_]", ""); // keep safe
+        String raw = Formatting.strip(stack.getName().getString());
+        return raw.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_]", "");
     }
 
     @Override
     public ActionResult onUse(BlockState state, World world, BlockPos pos, PlayerEntity player, BlockHitResult hit) {
-
-        // delegate and convert enum
-        return onUseWithItem(player.getMainHandStack(),
-                state, world, pos, player, Hand.MAIN_HAND, hit)
-                .toActionResult();
+        return onUseWithItem(player.getMainHandStack(), state, world, pos, player, Hand.MAIN_HAND, hit).toActionResult();
     }
 
     @Override
@@ -166,79 +169,59 @@ public class SuitcaseBlock extends BlockWithEntity {
                                           PlayerEntity player,
                                           Hand hand,
                                           BlockHitResult hit) {
-
-        if (world.isClient) {
-            return ItemActionResult.SUCCESS;
-        }
+        if (world.isClient) return ItemActionResult.SUCCESS;
 
         BlockEntity be = world.getBlockEntity(pos);
         if (!(be instanceof SuitcaseBlockEntity suitcase)) {
             return ItemActionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         }
 
-        //dimension lock check
         if (!suitcase.canOpenInDimension(world)) {
-            world.playSound(null, pos, SoundEvents.BLOCK_IRON_DOOR_CLOSE,
-                    SoundCategory.BLOCKS, .3F, 2F);
+            world.playSound(null, pos, SoundEvents.BLOCK_IRON_DOOR_CLOSE, SoundCategory.BLOCKS, .3F, 2F);
             player.sendMessage(Text.literal("☒").formatted(Formatting.RED), true);
             return ItemActionResult.SUCCESS;
         }
 
         String key = suitcase.getBoundKeystoneName();
 
-        //keystone interaction
         if (held.getItem() instanceof KeystoneItem) {
             String name = sanitize(held);
 
-            /* correct key → toggle lock */
             if (key != null && key.equals(name)) {
                 boolean locked = !suitcase.isLocked();
                 suitcase.setLocked(locked);
-
                 world.playSound(null, pos,
-                        locked ? SoundEvents.BLOCK_IRON_DOOR_CLOSE
-                                : SoundEvents.BLOCK_IRON_DOOR_OPEN,
+                        locked ? SoundEvents.BLOCK_IRON_DOOR_CLOSE : SoundEvents.BLOCK_IRON_DOOR_OPEN,
                         SoundCategory.BLOCKS, .3F, 2F);
-
-                player.sendMessage(Text.literal(locked ? "☒" : "☐")
-                        .formatted(Formatting.GRAY), true);
+                player.sendMessage(Text.literal(locked ? "☒" : "☐").formatted(Formatting.GRAY), true);
                 return ItemActionResult.SUCCESS;
             }
 
-            /* wrong key while locked */
             if (suitcase.isLocked()) {
-                world.playSound(null, pos, SoundEvents.BLOCK_IRON_DOOR_CLOSE,
-                        SoundCategory.BLOCKS, .3F, 2F);
+                world.playSound(null, pos, SoundEvents.BLOCK_IRON_DOOR_CLOSE, SoundCategory.BLOCKS, .3F, 2F);
                 player.sendMessage(Text.literal("☒").formatted(Formatting.RED), true);
                 return ItemActionResult.FAIL;
             }
 
-            /* un-named key */
             if (name.equals("item.pocket-repose.keystone")) {
-                player.sendMessage(Text.literal("Name the key to bind.")
-                        .formatted(Formatting.RED), false);
+                player.sendMessage(Text.literal("Name the key to bind.").formatted(Formatting.RED), false);
                 return ItemActionResult.FAIL;
             }
 
-            /* bind fresh key */
-            if (!KeystoneItem.isValidKeystone(held)) {
-                return ItemActionResult.FAIL;
-            }
+            if (!KeystoneItem.isValidKeystone(held)) return ItemActionResult.FAIL;
+
             suitcase.bindKeystone(name);
-            world.playSound(null, pos, SoundEvents.ITEM_LODESTONE_COMPASS_LOCK,
-                    SoundCategory.BLOCKS, 2F, 0F);
+            world.playSound(null, pos, SoundEvents.ITEM_LODESTONE_COMPASS_LOCK, SoundCategory.BLOCKS, 2F, 0F);
             return ItemActionResult.SUCCESS;
         }
 
         if (!player.isSneaking() || held.isEmpty()) {
             if (key == null) {
-                world.playSound(null, pos, SoundEvents.BLOCK_CHAIN_PLACE,
-                        SoundCategory.BLOCKS, .5F, 2F);
+                world.playSound(null, pos, SoundEvents.BLOCK_CHAIN_PLACE, SoundCategory.BLOCKS, .5F, 2F);
                 return ItemActionResult.FAIL;
             }
             if (suitcase.isLocked()) {
-                world.playSound(null, pos, SoundEvents.BLOCK_IRON_DOOR_CLOSE,
-                        SoundCategory.BLOCKS, .3F, 2F);
+                world.playSound(null, pos, SoundEvents.BLOCK_IRON_DOOR_CLOSE, SoundCategory.BLOCKS, .3F, 2F);
                 return ItemActionResult.FAIL;
             }
 
@@ -246,13 +229,11 @@ public class SuitcaseBlock extends BlockWithEntity {
             world.setBlockState(pos, state.with(OPEN, !open));
 
             world.playSound(null, pos,
-                    open ? SoundEvents.BLOCK_LADDER_BREAK
-                            : SoundEvents.BLOCK_LADDER_STEP,
+                    open ? SoundEvents.BLOCK_LADDER_BREAK : SoundEvents.BLOCK_LADDER_STEP,
                     SoundCategory.BLOCKS, .3F, 0F);
 
             world.playSound(null, pos,
-                    open ? SoundEvents.BLOCK_BAMBOO_WOOD_TRAPDOOR_CLOSE
-                            : SoundEvents.BLOCK_CHEST_LOCKED,
+                    open ? SoundEvents.BLOCK_BAMBOO_WOOD_TRAPDOOR_CLOSE : SoundEvents.BLOCK_CHEST_LOCKED,
                     SoundCategory.BLOCKS, .3F, open ? 0F : 2F);
 
             return ItemActionResult.SUCCESS;
@@ -263,48 +244,86 @@ public class SuitcaseBlock extends BlockWithEntity {
 
     @Override
     public void onEntityCollision(BlockState state, World world, BlockPos pos, Entity entity) {
-        if (!world.isClient && entity instanceof ServerPlayerEntity player && state.get(OPEN) && player.isSneaking()) {
-            BlockEntity be = world.getBlockEntity(pos);
-            if (!(be instanceof SuitcaseBlockEntity suitcase)) return;
-            String key = suitcase.getBoundKeystoneName();
-            if (key == null) return;
+        if (world.isClient) return;
+        if (!(entity instanceof ServerPlayerEntity player)) return;
+        if (!state.get(OPEN) || !player.isSneaking()) return;
 
-            // Create or get the dimension
-            Identifier dimId = Identifier.of("pocket-repose", "pocket_dimension_" + key);
-            ServerWorld target = ensureDimensionExists(world.getServer(), key, dimId);
+        Identifier id = world.getRegistryKey().getValue();
+        boolean inPocketDimension =
+                "pocket-repose".equals(id.getNamespace()) &&
+                        id.getPath().startsWith("pocket_dimension_");
 
-            if (target == null) {
-                player.sendMessage(Text.literal("§cFailed to create pocket dimension"), true);
-                return;
-            }
-
-            boolean first = suitcase.isFirstTimeEntering(player);
-            suitcase.playerEntered(player);
-            if (first) PocketRepose.ENTER_POCKET_DIMENSION.trigger(player);
-
-            player.stopRiding();
-            player.velocityModified = true;
-            player.setVelocity(Vec3d.ZERO);
-            player.fallDistance = 0f;
-
-            PlayerEntryData ped = PlayerEntryData.get(target);
-            Vec3d dest = ped.getEntryPos();
-            TeleportTarget tpTarget = new TeleportTarget(target, dest, Vec3d.ZERO, ped.getEntryYaw(), player.getPitch(), TeleportTarget.NO_OP);
-            player.teleportTo(tpTarget);
-            player.networkHandler.sendPacket(new StopSoundS2CPacket(null, null));
-            world.playSound(null, pos.getX() + .5, pos.getY() + .5, pos.getZ() + .5, SoundEvents.ITEM_BUNDLE_DROP_CONTENTS, SoundCategory.PLAYERS, 2F, 1F);
+        if (inPocketDimension && !PocketRepose.getAllowRecursion()) {
+            world.playSound(null, pos, SoundEvents.BLOCK_IRON_DOOR_CLOSE, SoundCategory.BLOCKS, .3F, 2F);
+            player.sendMessage(Text.literal("§cSuitcase recursion is disabled"), true);
+            return;
         }
+
+        BlockEntity be = world.getBlockEntity(pos);
+        if (!(be instanceof SuitcaseBlockEntity suitcase)) return;
+
+        String key = suitcase.getBoundKeystoneName();
+        if (key == null) return;
+
+        if (!suitcase.canOpenInDimension(world)) {
+            world.playSound(null, pos, SoundEvents.BLOCK_IRON_DOOR_CLOSE, SoundCategory.BLOCKS, .3F, 2F);
+            player.sendMessage(Text.literal("☒").formatted(Formatting.RED), true);
+            return;
+        }
+
+        Identifier dimId = Identifier.of("pocket-repose", "pocket_dimension_" + key);
+        ServerWorld target = ensureDimensionExists(world.getServer(), key, dimId);
+
+        if (target == null) {
+            player.sendMessage(Text.literal("§cFailed to create pocket dimension"), true);
+            return;
+        }
+
+        boolean first = suitcase.isFirstTimeEntering(player);
+        suitcase.playerEntered(player);
+        if (first) PocketRepose.ENTER_POCKET_DIMENSION.trigger(player);
+
+        SuitcaseLocationTracker tracker = SuitcaseLocationTracker.get(world.getServer());
+        if (tracker != null) {
+            UUID sid = suitcase.getSuitcaseId();
+            String dimStr = world.getRegistryKey().getValue().toString();
+
+            tracker.setLastSuitcase(key, player.getUuidAsString(), sid);
+
+            tracker.updateLocation(
+                    key,
+                    player.getUuidAsString(),
+                    dimStr,
+                    sid,
+                    player.getX(), player.getY(), player.getZ(),
+                    player.getYaw(), player.getPitch(),
+                    SuitcaseLocationTracker.LocationType.ENTRY
+            );
+
+            tracker.updateSuitcaseLocationFromBlock(sid, dimStr, pos);
+        }
+
+        player.stopRiding();
+        player.velocityModified = true;
+        player.setVelocity(Vec3d.ZERO);
+        player.fallDistance = 0f;
+
+        PlayerEntryData ped = PlayerEntryData.get(target);
+        Vec3d dest = ped.getEntryPos();
+        TeleportTarget tpTarget = new TeleportTarget(target, dest, Vec3d.ZERO, ped.getEntryYaw(), player.getPitch(), TeleportTarget.NO_OP);
+        player.teleportTo(tpTarget);
+
+        player.networkHandler.sendPacket(new StopSoundS2CPacket(null, null));
+        world.playSound(null, pos.getX() + .5, pos.getY() + .5, pos.getZ() + .5,
+                SoundEvents.ITEM_BUNDLE_DROP_CONTENTS, SoundCategory.PLAYERS, 2F, 1F);
     }
+
 
     private ServerWorld ensureDimensionExists(net.minecraft.server.MinecraftServer server, String key, Identifier dimId) {
         RegistryKey<World> dimKey = RegistryKey.of(RegistryKeys.WORLD, dimId);
         ServerWorld existing = server.getWorld(dimKey);
+        if (existing != null) return existing;
 
-        if (existing != null) {
-            return existing;
-        }
-
-        // Create new dimension
         Registry<Biome> biomeRegistry = server.getRegistryManager().get(RegistryKeys.BIOME);
         ChunkGenerator generator = new PortalChunkGenerator(biomeRegistry);
         long seed = server.getOverworld().getSeed();
@@ -318,17 +337,12 @@ public class SuitcaseBlock extends BlockWithEntity {
         RuntimeWorldHandle handle = Fantasy.get(server).getOrOpenPersistentWorld(dimId, config);
         ServerWorld world = handle.asWorld();
 
-        // Force spawn chunks to load
         world.setChunkForced(0, 0, true);
-
-        // Generate the initial structure
         generateInitialStructure(world);
-
         return world;
     }
 
     private void generateInitialStructure(ServerWorld world) {
-        // Place the portal floor at spawn
         for (int x = -2; x <= 2; x++) {
             for (int z = -2; z <= 2; z++) {
                 for (int y = -64; y <= -61; y++) {
@@ -338,25 +352,16 @@ public class SuitcaseBlock extends BlockWithEntity {
             }
         }
 
-        // Place a platform at spawn (y=96)
         BlockPos platformPos = new BlockPos(0, 96, 0);
         world.setBlockState(platformPos, Blocks.OAK_PLANKS.getDefaultState(), Block.NOTIFY_ALL);
 
-        // Place exit portal above platform
         BlockPos exitPortal = new BlockPos(0, 100, 0);
         world.setBlockState(exitPortal, ModBlocks.PORTAL.getDefaultState(), Block.NOTIFY_ALL);
 
-        // Set default player entry
         PlayerEntryData.get(world).setEntry(new Vec3d(0.5, 97.0, 0.5), 0f, 0f);
     }
 
-
-
-
-    @Override
-    public BlockRenderType getRenderType(BlockState state) {
-        return BlockRenderType.MODEL;
-    }
+    @Override public BlockRenderType getRenderType(BlockState state) { return BlockRenderType.MODEL; }
 
     @Override
     public VoxelShape getOutlineShape(BlockState state, BlockView world, BlockPos pos, ShapeContext ctx) {
@@ -368,15 +373,9 @@ public class SuitcaseBlock extends BlockWithEntity {
         };
     }
 
-    @Override
-    public VoxelShape getCollisionShape(BlockState state, BlockView world, BlockPos pos, ShapeContext ctx) {
-        return getOutlineShape(state, world, pos, ctx);
-    }
+    @Override public VoxelShape getCollisionShape(BlockState state, BlockView world, BlockPos pos, ShapeContext ctx) { return getOutlineShape(state, world, pos, ctx); }
 
-    @Override
-    public float getAmbientOcclusionLightLevel(BlockState state, BlockView world, BlockPos pos) {
-        return 1F;
-    }
+    @Override public float getAmbientOcclusionLightLevel(BlockState state, BlockView world, BlockPos pos) { return 1F; }
 
     @Nullable
     @Override
@@ -397,22 +396,22 @@ public class SuitcaseBlock extends BlockWithEntity {
 
     public ItemStack getPickStack(BlockView world, BlockPos pos, BlockState state) {
         ItemStack stack = super.getPickStack((WorldView) world, pos, state);
-        BlockEntity be  = world.getBlockEntity(pos);
+        BlockEntity be = world.getBlockEntity(pos);
 
         if (be instanceof SuitcaseBlockEntity suitcase) {
             String key = suitcase.getBoundKeystoneName();
             if (key != null) {
                 NbtCompound beTag = new NbtCompound();
-
-                beTag.putString("id", SUITCASE_BE_ID);            // <-- REQUIRED
+                beTag.putString("id", SUITCASE_BE_ID);
                 beTag.putString("BoundKeystone", key);
-                beTag.putBoolean("Locked",       suitcase.isLocked());
+                beTag.putBoolean("Locked", suitcase.isLocked());
+
+                beTag.putUuid(SuitcaseBlockEntity.NBT_SUITCASE_ID, suitcase.getSuitcaseId());
 
                 stack.set(DataComponentTypes.BLOCK_ENTITY_DATA, NbtComponent.of(beTag));
 
                 List<Text> lore = new ArrayList<>();
-                lore.add(Text.literal("Bound to: " + (suitcase.isLocked() ? "§k" : "")
-                                + key.replace("_", " "))
+                lore.add(Text.literal("Bound to: " + (suitcase.isLocked() ? "§k" : "") + key.replace("_", " "))
                         .formatted(Formatting.GRAY));
                 lore.add(Text.literal(suitcase.isLocked() ? "§cLocked" : "§aUnlocked")
                         .formatted(Formatting.GRAY));
