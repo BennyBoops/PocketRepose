@@ -28,7 +28,6 @@ public class SuitcaseRegistrySavedData extends PersistentState {
     private final Map<String, Map<String, BlockPos>> registry = new HashMap<>();
 
     public SuitcaseRegistrySavedData() {
-        // nothing else to initialise
     }
 
     private static SuitcaseRegistrySavedData fromNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup lookup) {

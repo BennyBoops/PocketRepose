@@ -1,8 +1,10 @@
 package net.bennyboops.modid.item;
 
 import net.bennyboops.modid.PocketRepose;
+import net.bennyboops.modid.block.ModBlocks;
 import net.bennyboops.modid.world.PortalChunkGenerator;
 import net.minecraft.block.Block;
+import net.minecraft.block.Blocks;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.component.type.CustomModelDataComponent;
 import net.minecraft.component.type.ItemEnchantmentsComponent;
@@ -120,9 +122,35 @@ public class KeystoneItem extends Item {
         registerDimension(server, dimensionName);
 
         if (!exists) {
-            placeStructureImmediately(server, handle.asWorld(), dimensionName);
-            PocketRepose.LOGGER.info("Created new pocket dimension {}", dimensionName);
+            if (PocketRepose.getSpawnIsland()) {
+                placeStructureImmediately(server, handle.asWorld(), dimensionName);
+                PocketRepose.LOGGER.info("Created new pocket dimension {} with island structure", dimensionName);
+            } else {
+                placeGrassCube(handle.asWorld());
+                PocketRepose.LOGGER.info("Created new pocket dimension {} with grass cube", dimensionName);
+            }
         }
+    }
+
+    private void placeGrassCube(ServerWorld world) {
+        BlockPos spawnPos = new BlockPos(17, 97, 9);
+
+        for (int x = -1; x <= 1; x++) {
+            for (int y = -1; y <= 1; y++) {
+                for (int z = -1; z <= 1; z++) {
+                    BlockPos grassPos = spawnPos.add(x, y - 2, z);
+                    world.setBlockState(grassPos, Blocks.GRASS_BLOCK.getDefaultState(), Block.NOTIFY_ALL);
+                }
+            }
+        }
+
+        BlockPos portalPos = new BlockPos(17, 100, 9);
+        world.setBlockState(portalPos, net.bennyboops.modid.block.ModBlocks.PORTAL.getDefaultState(), Block.NOTIFY_ALL);
+
+        net.bennyboops.modid.data.MobEntryData mobData = net.bennyboops.modid.data.MobEntryData.get(world);
+        mobData.setEntry(new net.minecraft.util.math.Vec3d(17.5, 97.0, 9.5), 0f, 0f);
+
+        PocketRepose.LOGGER.info("Placed cube, portal, and set mob entry at spawn location");
     }
 
     private void placeStructureImmediately(MinecraftServer server,
@@ -215,8 +243,6 @@ public class KeystoneItem extends Item {
                     .formatted(Formatting.GRAY, Formatting.ITALIC));
         }
 
-        // Don't show enchantments in tooltip
-        // This is handled by removing them from the component below
     }
 
     @Override
@@ -224,42 +250,34 @@ public class KeystoneItem extends Item {
                               Entity entity, int slot, boolean selected) {
         ItemFrameEntity frame = stack.getFrame();
 
-        // Check if it has a custom name (renamed in anvil)
         boolean hasCustomName = stack.contains(DataComponentTypes.CUSTOM_NAME);
 
-        // Check if it's the default name (untranslated key)
         String displayName = stack.getName().getString();
         boolean isDefaultName = displayName.equalsIgnoreCase("item.pocket-repose.keystone")
-                || displayName.equalsIgnoreCase("Keystone"); // Add translated name too
+                || displayName.equalsIgnoreCase("Keystone");
 
-        // Show broken texture if: no custom name OR still has default name
         boolean shouldShowBroken = !hasCustomName || isDefaultName;
 
-        // Handle item frame case
         if (frame != null) {
             shouldShowBroken = !frame.hasCustomName();
         }
 
         if (shouldShowBroken) {
-            // Show broken texture (custom_model_data=1)
             CustomModelDataComponent cmd = stack.get(DataComponentTypes.CUSTOM_MODEL_DATA);
             if (cmd == null || cmd.value() != 1) {
                 stack.set(DataComponentTypes.CUSTOM_MODEL_DATA,
                         new CustomModelDataComponent(1));
             }
         } else {
-            // Show normal texture (remove custom_model_data)
             stack.remove(DataComponentTypes.CUSTOM_MODEL_DATA);
         }
 
         if (!world.isClient && stack.hasEnchantments()) {
-            // Set high repair cost so it can't be easily modified
             int cost = stack.getOrDefault(DataComponentTypes.REPAIR_COST, 0);
             if (cost < 32_767) {
                 stack.set(DataComponentTypes.REPAIR_COST, 32_767);
             }
 
-            // Hide enchantment tooltip
             ItemEnchantmentsComponent enchantments = stack.get(DataComponentTypes.ENCHANTMENTS);
             if (enchantments != null) {
                 stack.set(DataComponentTypes.ENCHANTMENTS, enchantments.withShowInTooltip(false));
@@ -269,7 +287,6 @@ public class KeystoneItem extends Item {
 
     @Override
     public boolean hasGlint(ItemStack stack) {
-        // Always show enchantment glint if it has enchantments
         return stack.hasEnchantments();
     }
 
