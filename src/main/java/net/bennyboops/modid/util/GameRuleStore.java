@@ -2,26 +2,26 @@ package net.bennyboops.modid.util;
 
 import it.unimi.dsi.fastutil.objects.*;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.world.GameRules;
+import net.minecraft.world.level.GameRules;
 import org.jetbrains.annotations.Nullable;
 
 public final class GameRuleStore {
-    private final Reference2BooleanMap<GameRules.Key<GameRules.BooleanRule>> booleanRules = new Reference2BooleanOpenHashMap<>();
-    private final Reference2IntMap<GameRules.Key<GameRules.IntRule>> intRules = new Reference2IntOpenHashMap<>();
+    private final Reference2BooleanMap<GameRules.Key<GameRules.BooleanValue>> booleanRules = new Reference2BooleanOpenHashMap<>();
+    private final Reference2IntMap<GameRules.Key<GameRules.IntegerValue>> intRules = new Reference2IntOpenHashMap<>();
 
-    public void set(GameRules.Key<GameRules.BooleanRule> key, boolean value) {
+    public void set(GameRules.Key<GameRules.BooleanValue> key, boolean value) {
         this.booleanRules.put(key, value);
     }
 
-    public void set(GameRules.Key<GameRules.IntRule> key, int value) {
+    public void set(GameRules.Key<GameRules.IntegerValue> key, int value) {
         this.intRules.put(key, value);
     }
 
-    public boolean getBoolean(GameRules.Key<GameRules.BooleanRule> key) {
+    public boolean getBoolean(GameRules.Key<GameRules.BooleanValue> key) {
         return this.booleanRules.getBoolean(key);
     }
 
-    public int getInt(GameRules.Key<GameRules.IntRule> key) {
+    public int getInt(GameRules.Key<GameRules.IntegerValue> key) {
         return this.intRules.getInt(key);
     }
 
@@ -31,13 +31,13 @@ public final class GameRuleStore {
 
     public void applyTo(GameRules rules, @Nullable MinecraftServer server) {
         Reference2BooleanMaps.fastForEach(this.booleanRules, entry -> {
-            GameRules.BooleanRule rule = rules.get(entry.getKey());
+            GameRules.BooleanValue rule = rules.getRule(entry.getKey());
             rule.set(entry.getBooleanValue(), server);
         });
 
         Reference2IntMaps.fastForEach(this.intRules, entry -> {
-            GameRules.IntRule rule = rules.get(entry.getKey());
-            rule.value = entry.getIntValue();
+            GameRules.IntegerValue rule = rules.getRule(entry.getKey());
+            rule.set(entry.getIntValue(), server);
         });
     }
 }

@@ -1,24 +1,24 @@
 package net.bennyboops.modid.world;
 
-import net.minecraft.registry.SimpleRegistry;
-import net.minecraft.util.Identifier;
+import net.minecraft.core.MappedRegistry;
+import net.minecraft.resources.ResourceLocation;
 import org.jetbrains.annotations.ApiStatus;
 
 @ApiStatus.Internal
 public interface RemoveFromRegistry<T> {
     @SuppressWarnings("unchecked")
-    static <T> boolean remove(SimpleRegistry<T> registry, Identifier key) {
+    static <T> boolean remove(MappedRegistry<T> registry, ResourceLocation key) {
         return ((RemoveFromRegistry<T>) registry).fantasy$remove(key);
     }
 
     @SuppressWarnings("unchecked")
-    static <T> boolean remove(SimpleRegistry<T> registry, T value) {
+    static <T> boolean remove(MappedRegistry<T> registry, T value) {
         return ((RemoveFromRegistry<T>) registry).fantasy$remove(value);
     }
 
     boolean fantasy$remove(T value);
 
-    boolean fantasy$remove(Identifier key);
+    boolean fantasy$remove(ResourceLocation key);
 
     void fantasy$setFrozen(boolean value);
 

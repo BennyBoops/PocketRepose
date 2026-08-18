@@ -4,6 +4,7 @@ import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.serialization.MapCodec;
 import net.bennyboops.modid.block.ModBlocks;
 import net.bennyboops.modid.block.SuitcaseBlock;
 import net.bennyboops.modid.block.entity.ModBlockEntities;
@@ -21,55 +22,68 @@ import net.bennyboops.modid.world.Fantasy;
 import net.bennyboops.modid.world.PortalChunkGenerator;
 import net.bennyboops.modid.world.PortalChunkHandler;
 import net.bennyboops.modid.world.RuntimeWorldConfig;
-import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
-import net.fabricmc.fabric.api.entity.event.v1.ServerEntityWorldChangeEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.fabricmc.fabric.api.event.player.UseEntityCallback;
-import net.fabricmc.fabric.api.event.player.UseItemCallback;
-import net.minecraft.block.Block;
-import net.minecraft.block.Blocks;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.ContainerComponent;
-import net.minecraft.component.type.NbtComponent;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.ItemEntity;
-import net.minecraft.entity.LivingEntity;
-import net.minecraft.entity.mob.*;
-import net.minecraft.entity.passive.WolfEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.inventory.Inventory;
-import net.minecraft.item.BlockItem;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtList;
-import net.minecraft.registry.*;
+import net.minecraft.advancements.CriterionTrigger;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Registry;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.command.CommandManager;
-import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.sound.SoundCategory;
-import net.minecraft.sound.SoundEvents;
-import net.minecraft.text.Text;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.TypedActionResult;
-import net.minecraft.util.WorldSavePath;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.TeleportTarget;
-import net.minecraft.world.World;
-import net.minecraft.world.biome.Biome;
-import net.minecraft.world.chunk.WorldChunk;
-import net.minecraft.world.dimension.DimensionType;
-import net.minecraft.world.gen.chunk.ChunkGenerator;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.Container;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.animal.Wolf;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.monster.EnderMan;
+import net.minecraft.world.entity.monster.Monster;
+import net.minecraft.world.entity.monster.Spider;
+import net.minecraft.world.entity.monster.ZombifiedPiglin;
+import net.minecraft.world.entity.monster.piglin.Piglin;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.item.component.ItemContainerContents;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.storage.LevelResource;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.chunk.ChunkGenerator;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.dimension.DimensionType;
+import net.minecraft.world.level.portal.DimensionTransition;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
+import net.neoforged.neoforge.event.level.ChunkEvent;
+import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.server.ServerStoppingEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.neoforge.registries.DeferredHolder;
+import net.neoforged.neoforge.registries.DeferredRegister;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,248 +92,278 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 
-public class PocketRepose implements ModInitializer {
+@Mod(PocketRepose.MODID)
+public class PocketRepose {
 
-	public static final Identifier POCKET_DIMENSION_TYPE_ID =
-			Identifier.of("pocket-repose", "pocket_dimension_type");
-	public static final RegistryKey<DimensionType> POCKET_DIMENSION_TYPE_KEY =
-			RegistryKey.of(RegistryKeys.DIMENSION_TYPE, POCKET_DIMENSION_TYPE_ID);
+	/** NeoForge mod id — hyphens are not allowed there, unlike in resource namespaces. */
+	public static final String MODID = "pocket_repose";
+	/** Resource namespace, kept as-is so existing worlds and assets stay compatible. */
 	public static final String MOD_ID = "pocket-repose";
-	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
-	public static final EnterPocketDimensionCriterion ENTER_POCKET_DIMENSION =
-			Registry.register(
-					Registries.CRITERION,
-					Identifier.of(PocketRepose.MOD_ID, "enter_pocket_dimension"),
-					new EnterPocketDimensionCriterion()
-			);
 
-	@Override
-	public void onInitialize() {
+	public static final ResourceLocation POCKET_DIMENSION_TYPE_ID =
+			ResourceLocation.fromNamespaceAndPath(MOD_ID, "pocket_dimension_type");
+	public static final ResourceKey<DimensionType> POCKET_DIMENSION_TYPE_KEY =
+			ResourceKey.create(Registries.DIMENSION_TYPE, POCKET_DIMENSION_TYPE_ID);
+	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
+
+	public static final ResourceKey<Biome> VOID_BIOME_KEY =
+			ResourceKey.create(Registries.BIOME, ResourceLocation.fromNamespaceAndPath(MOD_ID, "pocket_islands"));
+
+	public static final DeferredRegister<CriterionTrigger<?>> TRIGGERS =
+			DeferredRegister.create(Registries.TRIGGER_TYPE, MOD_ID);
+
+	public static final DeferredHolder<CriterionTrigger<?>, EnterPocketDimensionCriterion> ENTER_POCKET_DIMENSION =
+			TRIGGERS.register("enter_pocket_dimension", EnterPocketDimensionCriterion::new);
+
+	public static final DeferredRegister<MapCodec<? extends ChunkGenerator>> CHUNK_GENERATORS =
+			DeferredRegister.create(Registries.CHUNK_GENERATOR, MOD_ID);
+
+	public static final DeferredHolder<MapCodec<? extends ChunkGenerator>, MapCodec<VoidChunkGenerator>> VOID_CHUNK_GENERATOR =
+			CHUNK_GENERATORS.register("void_chunk_generator", () -> VoidChunkGenerator.CODEC);
+
+	public static final DeferredHolder<MapCodec<? extends ChunkGenerator>, MapCodec<PortalChunkGenerator>> PORTAL_CHUNK_GENERATOR =
+			CHUNK_GENERATORS.register("portal_chunk_generator", () -> PortalChunkGenerator.CODEC);
+
+	public PocketRepose(IEventBus modEventBus, ModContainer modContainer) {
 
 		LOGGER.info("Initializing " + MOD_ID);
 
-		Registry.register(Registries.CHUNK_GENERATOR,
-				Identifier.of("pocket-repose", "void_chunk_generator"),
-				VoidChunkGenerator.CODEC);
+		ModItems.registerModItems(modEventBus);
+		ModBlocks.registerModBlocks(modEventBus);
+		ModItemGroups.registerItemGroups(modEventBus);
+		ModBlockEntities.registerBlockEntities(modEventBus);
 
-		Registry.register(Registries.CHUNK_GENERATOR,
-				Identifier.of("pocket-repose", "portal_chunk_generator"),
-				PortalChunkGenerator.CODEC);
+		TRIGGERS.register(modEventBus);
+		CHUNK_GENERATORS.register(modEventBus);
 
-		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-			SuitcaseRegistrySavedData.onServerStart(server);
-		});
+		IEventBus gameEventBus = NeoForge.EVENT_BUS;
 
-		ModItems.registerModItems();
-		ModBlocks.registerModBlocks();
-		ModItemGroups.registerItemGroups();
-		ModBlockEntities.registerBlockEntities();
+		gameEventBus.addListener(PocketRepose::onServerStarted);
+		gameEventBus.addListener(PocketRepose::onServerStopping);
+		gameEventBus.addListener(PocketRepose::onServerTickPre);
+		gameEventBus.addListener(PocketRepose::onServerTickPost);
+		gameEventBus.addListener(PocketRepose::onRegisterCommands);
+		gameEventBus.addListener(PortalChunkHandler::onChunkLoad);
+		gameEventBus.addListener(PocketRepose::onEntityJoinLevel);
+		gameEventBus.addListener(PocketRepose::onRightClickItem);
+		gameEventBus.addListener(PocketRepose::onEntityInteract);
+	}
 
-		PortalChunkHandler.initialize();
+	private static void onServerStarted(ServerStartedEvent event) {
+		MinecraftServer server = event.getServer();
 
-		registerPocketCommands();
-		registerSuitcaseMobTeleport();
-		registerMobEntrySetter();
-		registerPlayerEntrySetter();
-		registerKeyRescueMob();
+		SuitcaseRegistrySavedData.onServerStart(server);
 
-		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
-			Path registryFile = server.getSavePath(WorldSavePath.ROOT)
-					.resolve("data")
-					.resolve("pocket-repose")
-					.resolve("dimension_registry")
-					.resolve("registry.txt");
+		Path registryFile = server.getWorldPath(LevelResource.ROOT)
+				.resolve("data")
+				.resolve("pocket-repose")
+				.resolve("dimension_registry")
+				.resolve("registry.txt");
 
-			if (!Files.exists(registryFile)) return;
+		if (!Files.exists(registryFile)) return;
 
-			Registry<Biome> biomeRegistry = server.getRegistryManager().get(RegistryKeys.BIOME);
-			long seed = server.getOverworld().getSeed();
+		Registry<Biome> biomeRegistry = server.registryAccess().registryOrThrow(Registries.BIOME);
+		long seed = server.overworld().getSeed();
 
-			try {
-				for (String dimName : Files.readAllLines(registryFile)) {
-					Identifier worldId = Identifier.of("pocket-repose", dimName);
-					ChunkGenerator gen = new PortalChunkGenerator(biomeRegistry);
+		try {
+			for (String dimName : Files.readAllLines(registryFile)) {
+				ResourceLocation worldId = ResourceLocation.fromNamespaceAndPath(MOD_ID, dimName);
+				ChunkGenerator gen = new PortalChunkGenerator(biomeRegistry);
 
-					RuntimeWorldConfig cfg = new RuntimeWorldConfig()
-							.setDimensionType(POCKET_DIMENSION_TYPE_KEY)
-							.setGenerator(gen)
-							.setSeed(seed);
+				RuntimeWorldConfig cfg = new RuntimeWorldConfig()
+						.setDimensionType(POCKET_DIMENSION_TYPE_KEY)
+						.setGenerator(gen)
+						.setSeed(seed);
 
-					Fantasy.get(server).getOrOpenPersistentWorld(worldId, cfg);
-				}
-			} catch (IOException e) {
-				LOGGER.error("Failed to reload pocket dimensions", e);
+				Fantasy.get(server).getOrOpenPersistentWorld(worldId, cfg);
 			}
-		});
+		} catch (IOException e) {
+			LOGGER.error("Failed to reload pocket dimensions", e);
+		}
+	}
 
-		ServerEntityWorldChangeEvents.AFTER_ENTITY_CHANGE_WORLD.register((originalEntity, newEntity, origin, destination) -> {
-			if (!(newEntity instanceof ItemEntity itemEntity)) return;
+	private static void onServerStopping(ServerStoppingEvent event) {
+		Fantasy.onServerStopping(event.getServer());
+	}
 
-			ItemStack stack = itemEntity.getStack();
-			if (!(stack.getItem() instanceof BlockItem bi) || !(bi.getBlock() instanceof SuitcaseBlock)) return;
+	private static void onServerTickPre(ServerTickEvent.Pre event) {
+		Fantasy.onServerTick(event.getServer());
+	}
 
-			NbtComponent beData = stack.get(DataComponentTypes.BLOCK_ENTITY_DATA);
-			if (beData == null) return;
+	private static void onEntityJoinLevel(EntityJoinLevelEvent event) {
+		if (event.getLevel().isClientSide()) return;
+		if (!(event.getEntity() instanceof ItemEntity itemEntity)) return;
+		if (!(event.getLevel() instanceof ServerLevel destination)) return;
 
-			NbtCompound nbt = beData.copyNbt();
-			String keystone = nbt.getString("BoundKeystone");
-			if (keystone.isEmpty()) return;
+		ItemStack stack = itemEntity.getItem();
+		if (!(stack.getItem() instanceof BlockItem bi) || !(bi.getBlock() instanceof SuitcaseBlock)) return;
 
-			UUID suitcaseId = null;
-			if (nbt.containsUuid(SuitcaseBlockEntity.NBT_SUITCASE_ID)) {
-				suitcaseId = nbt.getUuid(SuitcaseBlockEntity.NBT_SUITCASE_ID);
-			}
+		CustomData beData = stack.get(DataComponents.BLOCK_ENTITY_DATA);
+		if (beData == null) return;
 
-			SuitcaseLocationTracker tracker = SuitcaseLocationTracker.get(destination.getServer());
-			if (tracker == null) return;
+		CompoundTag nbt = beData.copyTag();
+		String keystone = nbt.getString("BoundKeystone");
+		if (keystone.isEmpty()) return;
 
-			String dimStr = destination.getRegistryKey().getValue().toString();
+		UUID suitcaseId = null;
+		if (nbt.hasUUID(SuitcaseBlockEntity.NBT_SUITCASE_ID)) {
+			suitcaseId = nbt.getUUID(SuitcaseBlockEntity.NBT_SUITCASE_ID);
+		}
 
-			if (suitcaseId != null) {
-				tracker.updateSuitcaseLocation(
-						suitcaseId,
+		SuitcaseLocationTracker tracker = SuitcaseLocationTracker.get(destination.getServer());
+		if (tracker == null) return;
+
+		String dimStr = destination.dimension().location().toString();
+
+		if (suitcaseId != null) {
+			tracker.updateSuitcaseLocation(
+					suitcaseId,
+					dimStr,
+					itemEntity.getX(),
+					itemEntity.getY() + 1.0,
+					itemEntity.getZ(),
+					SuitcaseLocationTracker.LocationType.ITEM_ENTITY
+			);
+		}
+
+		if (nbt.contains("EnteredPlayers", Tag.TAG_LIST)) {
+			ListTag players = nbt.getList("EnteredPlayers", Tag.TAG_COMPOUND);
+			for (int i = 0; i < players.size(); i++) {
+				CompoundTag p = players.getCompound(i);
+				String uuid = p.getString("UUID");
+				tracker.updateLocation(
+						keystone,
+						uuid,
 						dimStr,
+						suitcaseId,
 						itemEntity.getX(),
 						itemEntity.getY() + 1.0,
 						itemEntity.getZ(),
+						0, 0,
 						SuitcaseLocationTracker.LocationType.ITEM_ENTITY
 				);
 			}
+		}
+	}
 
-			if (nbt.contains("EnteredPlayers", NbtElement.LIST_TYPE)) {
-				NbtList players = nbt.getList("EnteredPlayers", NbtElement.COMPOUND_TYPE);
-				for (int i = 0; i < players.size(); i++) {
-					NbtCompound p = players.getCompound(i);
-					String uuid = p.getString("UUID");
-					tracker.updateLocation(
-							keystone,
-							uuid,
+	private static void onServerTickPost(ServerTickEvent.Post event) {
+		MinecraftServer server = event.getServer();
+
+		SuitcaseLocationTracker tracker = SuitcaseLocationTracker.get(server);
+		if (tracker == null) return;
+
+		long ticks = server.getTickCount();
+
+		if (ticks % 20 == 0) {
+			for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+				String dimStr = player.serverLevel().dimension().location().toString();
+				for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+					ItemStack stack = player.getInventory().getItem(i);
+					scanStackRecursivelyForSuitcases(
+							tracker,
+							stack,
 							dimStr,
-							suitcaseId,
-							itemEntity.getX(),
-							itemEntity.getY() + 1.0,
-							itemEntity.getZ(),
+							player.getX(), player.getY() + 1.0, player.getZ(),
+							player.getYRot(), player.getXRot(),
+							MAX_NESTED_CONTAINER_DEPTH
+					);
+
+				}
+			}
+		}
+
+		if (ticks % 40 == 0) {
+			for (ServerLevel w : server.getAllLevels()) {
+				String dimStr = w.dimension().location().toString();
+
+				AABB searchBox = new AABB(
+						w.getWorldBorder().getCenterX() - w.getWorldBorder().getSize() / 2,
+						w.getMinBuildHeight(),
+						w.getWorldBorder().getCenterZ() - w.getWorldBorder().getSize() / 2,
+						w.getWorldBorder().getCenterX() + w.getWorldBorder().getSize() / 2,
+						w.getMaxBuildHeight(),
+						w.getWorldBorder().getCenterZ() + w.getWorldBorder().getSize() / 2
+				);
+
+				List<ItemEntity> itemEntities = w.getEntitiesOfClass(
+						ItemEntity.class,
+						searchBox,
+						itemEntity -> {
+							ItemStack st = itemEntity.getItem();
+							if (st.isEmpty()) return false;
+
+							if (st.getItem() instanceof BlockItem b && b.getBlock() instanceof SuitcaseBlock) return true;
+
+							return st.get(DataComponents.CONTAINER) != null;
+						}
+				);
+
+				for (ItemEntity item : itemEntities) {
+					scanStackRecursivelyForSuitcases(
+							tracker,
+							item.getItem(),
+							dimStr,
+							item.getX(), item.getY() + 1.0, item.getZ(),
 							0, 0,
-							SuitcaseLocationTracker.LocationType.ITEM_ENTITY
+							MAX_NESTED_CONTAINER_DEPTH
 					);
 				}
+
 			}
-		});
+		}
 
-		ServerTickEvents.END_SERVER_TICK.register(server -> {
-			SuitcaseLocationTracker tracker = SuitcaseLocationTracker.get(server);
-			if (tracker == null) return;
-
-			long ticks = server.getTicks();
-
-			if (ticks % 20 == 0) {
-				for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-					String dimStr = player.getServerWorld().getRegistryKey().getValue().toString();
-					for (int i = 0; i < player.getInventory().size(); i++) {
-						ItemStack stack = player.getInventory().getStack(i);
-						scanStackRecursivelyForSuitcases(
-								tracker,
-								stack,
-								dimStr,
-								player.getX(), player.getY() + 1.0, player.getZ(),
-								player.getYaw(), player.getPitch(),
-								MAX_NESTED_CONTAINER_DEPTH
-						);
-
-					}
+		if (ticks % 100 == 0) {
+			for (ServerLevel w : server.getAllLevels()) {
+				if (!w.dimension().equals(Level.OVERWORLD)
+						&& !w.dimension().equals(Level.NETHER)
+						&& !w.dimension().equals(Level.END)) {
+					continue;
 				}
-			}
 
-			if (ticks % 40 == 0) {
-				for (ServerWorld w : server.getWorlds()) {
-					String dimStr = w.getRegistryKey().getValue().toString();
+				for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+					if (!player.serverLevel().equals(w)) continue;
 
-					Box searchBox = new Box(
-							w.getWorldBorder().getCenterX() - w.getWorldBorder().getSize() / 2,
-							w.getBottomY(),
-							w.getWorldBorder().getCenterZ() - w.getWorldBorder().getSize() / 2,
-							w.getWorldBorder().getCenterX() + w.getWorldBorder().getSize() / 2,
-							w.getTopY(),
-							w.getWorldBorder().getCenterZ() + w.getWorldBorder().getSize() / 2
-					);
+					ChunkPos playerChunk = player.chunkPosition();
+					int radius = 8;
 
-					List<ItemEntity> itemEntities = w.getEntitiesByClass(
-							ItemEntity.class,
-							searchBox,
-							itemEntity -> {
-								ItemStack st = itemEntity.getStack();
-								if (st.isEmpty()) return false;
+					for (int cx = playerChunk.x - radius; cx <= playerChunk.x + radius; cx++) {
+						for (int cz = playerChunk.z - radius; cz <= playerChunk.z + radius; cz++) {
+							if (!w.hasChunk(cx, cz)) continue;
 
-								if (st.getItem() instanceof BlockItem b && b.getBlock() instanceof SuitcaseBlock) return true;
-
-								return st.get(DataComponentTypes.CONTAINER) != null;
-							}
-					);
-
-					for (ItemEntity item : itemEntities) {
-						scanStackRecursivelyForSuitcases(
-								tracker,
-								item.getStack(),
-								dimStr,
-								item.getX(), item.getY() + 1.0, item.getZ(),
-								0, 0,
-								MAX_NESTED_CONTAINER_DEPTH
-						);
-					}
-
-				}
-			}
-
-			if (ticks % 100 == 0) {
-				for (ServerWorld w : server.getWorlds()) {
-					if (!w.getRegistryKey().equals(World.OVERWORLD)
-							&& !w.getRegistryKey().equals(World.NETHER)
-							&& !w.getRegistryKey().equals(World.END)) {
-						continue;
-					}
-
-					for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-						if (!player.getServerWorld().equals(w)) continue;
-
-						ChunkPos playerChunk = player.getChunkPos();
-						int radius = 8;
-
-						for (int cx = playerChunk.x - radius; cx <= playerChunk.x + radius; cx++) {
-							for (int cz = playerChunk.z - radius; cz <= playerChunk.z + radius; cz++) {
-								if (!w.isChunkLoaded(cx, cz)) continue;
-
-								WorldChunk chunk = w.getChunk(cx, cz);
-								for (BlockEntity be : chunk.getBlockEntities().values()) {
-									scanContainerForSuitcases(tracker, be, w);
-								}
+							LevelChunk chunk = w.getChunk(cx, cz);
+							for (BlockEntity be : chunk.getBlockEntities().values()) {
+								scanContainerForSuitcases(tracker, be, w);
 							}
 						}
 					}
 				}
 			}
-		});
+		}
 	}
+
 	private static final int MAX_NESTED_CONTAINER_DEPTH = 4;
+
 	private static void scanStackRecursivelyForSuitcases(SuitcaseLocationTracker tracker, ItemStack stack, String dimStr, double x, double y, double z, float yaw, float pitch, int depth) {
 		if (stack.isEmpty() || depth <= 0) return;
 
 		updateSuitcaseLocationFromItem(tracker, stack, dimStr, x, y, z, yaw, pitch);
 
-		ContainerComponent container = stack.get(DataComponentTypes.CONTAINER);
+		ItemContainerContents container = stack.get(DataComponents.CONTAINER);
 		if (container == null) return;
 
-		for (ItemStack inner : container.iterateNonEmpty()) {
+		for (ItemStack inner : container.nonEmptyItems()) {
 			scanStackRecursivelyForSuitcases(tracker, inner, dimStr, x, y, z, yaw, pitch, depth - 1);
 		}
 	}
-	private static void scanContainerForSuitcases(SuitcaseLocationTracker tracker, BlockEntity blockEntity, ServerWorld world) {
-		if (!(blockEntity instanceof Inventory inventory)) return;
 
-		BlockPos containerPos = blockEntity.getPos();
-		String dimStr = world.getRegistryKey().getValue().toString();
+	private static void scanContainerForSuitcases(SuitcaseLocationTracker tracker, BlockEntity blockEntity, ServerLevel world) {
+		if (!(blockEntity instanceof Container inventory)) return;
 
-		for (int i = 0; i < inventory.size(); i++) {
-			ItemStack stack = inventory.getStack(i);
+		BlockPos containerPos = blockEntity.getBlockPos();
+		String dimStr = world.dimension().location().toString();
+
+		for (int i = 0; i < inventory.getContainerSize(); i++) {
+			ItemStack stack = inventory.getItem(i);
 
 			scanStackRecursivelyForSuitcases(
 					tracker,
@@ -336,16 +380,16 @@ public class PocketRepose implements ModInitializer {
 
 			if (!(stack.getItem() instanceof BlockItem bi) || !(bi.getBlock() instanceof SuitcaseBlock)) continue;
 
-			NbtComponent beData = stack.get(DataComponentTypes.BLOCK_ENTITY_DATA);
+			CustomData beData = stack.get(DataComponents.BLOCK_ENTITY_DATA);
 			if (beData == null) continue;
 
-			NbtCompound nbt = beData.copyNbt();
+			CompoundTag nbt = beData.copyTag();
 			String keystone = nbt.getString("BoundKeystone");
 			if (keystone.isEmpty()) continue;
 
 			UUID suitcaseId = null;
-			if (nbt.containsUuid(SuitcaseBlockEntity.NBT_SUITCASE_ID)) {
-				suitcaseId = nbt.getUuid(SuitcaseBlockEntity.NBT_SUITCASE_ID);
+			if (nbt.hasUUID(SuitcaseBlockEntity.NBT_SUITCASE_ID)) {
+				suitcaseId = nbt.getUUID(SuitcaseBlockEntity.NBT_SUITCASE_ID);
 			}
 
 			if (suitcaseId != null) {
@@ -359,11 +403,11 @@ public class PocketRepose implements ModInitializer {
 				);
 			}
 
-			if (!nbt.contains("EnteredPlayers", NbtElement.LIST_TYPE)) continue;
+			if (!nbt.contains("EnteredPlayers", Tag.TAG_LIST)) continue;
 
-			NbtList players = nbt.getList("EnteredPlayers", NbtElement.COMPOUND_TYPE);
+			ListTag players = nbt.getList("EnteredPlayers", Tag.TAG_COMPOUND);
 			for (int j = 0; j < players.size(); j++) {
-				NbtCompound p = players.getCompound(j);
+				CompoundTag p = players.getCompound(j);
 				String uuid = p.getString("UUID");
 
 				tracker.updateLocation(
@@ -381,22 +425,23 @@ public class PocketRepose implements ModInitializer {
 
 		}
 	}
+
 	private static void updateSuitcaseLocationFromItem(SuitcaseLocationTracker tracker, ItemStack stack, String dimStr, double x, double y, double z, float yaw, float pitch) {
 
 		if (stack.isEmpty()) return;
 		if (!(stack.getItem() instanceof BlockItem bi)) return;
 		if (!(bi.getBlock() instanceof SuitcaseBlock)) return;
 
-		NbtComponent beData = stack.get(DataComponentTypes.BLOCK_ENTITY_DATA);
+		CustomData beData = stack.get(DataComponents.BLOCK_ENTITY_DATA);
 		if (beData == null) return;
 
-		NbtCompound nbt = beData.copyNbt();
+		CompoundTag nbt = beData.copyTag();
 		String keystone = nbt.getString("BoundKeystone");
 		if (keystone.isEmpty()) return;
 
 		UUID suitcaseId = null;
-		if (nbt.containsUuid(SuitcaseBlockEntity.NBT_SUITCASE_ID)) {
-			suitcaseId = nbt.getUuid(SuitcaseBlockEntity.NBT_SUITCASE_ID);
+		if (nbt.hasUUID(SuitcaseBlockEntity.NBT_SUITCASE_ID)) {
+			suitcaseId = nbt.getUUID(SuitcaseBlockEntity.NBT_SUITCASE_ID);
 		}
 
 		if (suitcaseId != null) {
@@ -408,11 +453,11 @@ public class PocketRepose implements ModInitializer {
 			);
 		}
 
-		if (!nbt.contains("EnteredPlayers", NbtElement.LIST_TYPE)) return;
+		if (!nbt.contains("EnteredPlayers", Tag.TAG_LIST)) return;
 
-		NbtList players = nbt.getList("EnteredPlayers", NbtElement.COMPOUND_TYPE);
+		ListTag players = nbt.getList("EnteredPlayers", Tag.TAG_COMPOUND);
 		for (int i = 0; i < players.size(); i++) {
-			NbtCompound p = players.getCompound(i);
+			CompoundTag p = players.getCompound(i);
 			String uuid = p.getString("UUID");
 
 			tracker.updateLocation(
@@ -426,668 +471,612 @@ public class PocketRepose implements ModInitializer {
 			);
 		}
 	}
-	private static UUID ensureSuitcaseIdOnSuitcaseStack(ItemStack stack, NbtCompound beNbt) {
-		if (beNbt.containsUuid(SuitcaseBlockEntity.NBT_SUITCASE_ID)) {
-			return beNbt.getUuid(SuitcaseBlockEntity.NBT_SUITCASE_ID);
+
+	private static UUID ensureSuitcaseIdOnSuitcaseStack(ItemStack stack, CompoundTag beNbt) {
+		if (beNbt.hasUUID(SuitcaseBlockEntity.NBT_SUITCASE_ID)) {
+			return beNbt.getUUID(SuitcaseBlockEntity.NBT_SUITCASE_ID);
 		}
 		UUID id = UUID.randomUUID();
-		beNbt.putUuid(SuitcaseBlockEntity.NBT_SUITCASE_ID, id);
+		beNbt.putUUID(SuitcaseBlockEntity.NBT_SUITCASE_ID, id);
 		return id;
 	}
-	private static void updateSuitcaseLocation(SuitcaseLocationTracker tracker, ItemStack stack, ServerWorld world, double x, double y, double z, float yaw, float pitch) {
 
-		if (stack.isEmpty() || !(stack.getItem() instanceof BlockItem bi)
-				|| !(bi.getBlock() instanceof SuitcaseBlock)) {
-			return;
-		}
+	private static void onRegisterCommands(RegisterCommandsEvent event) {
+		event.getDispatcher().register(
+				LiteralArgumentBuilder.<CommandSourceStack>literal("pocketRepose")
 
-		NbtComponent beData = stack.get(DataComponentTypes.BLOCK_ENTITY_DATA);
-		if (beData == null) return;
+						// mob entry setter
+						.then(Commands.literal("setMobEntry")
+								.executes(ctx -> {
+									CommandSourceStack src = ctx.getSource();
+									ServerLevel world = src.getLevel();
+									ResourceLocation id = world.dimension().location();
+									if (!id.getNamespace().equals("pocket-repose")
+											|| !id.getPath().startsWith("pocket_dimension_")) {
+										src.sendFailure(Component.literal("§cNot in a pocket dimension"));
+										return 0;
+									}
+									Vec3 pos = src.getPosition();
+									float yaw = src.getEntity().getYRot();
+									float pitch = src.getEntity().getXRot();
 
-		NbtCompound nbt = beData.copyNbt();
-		String keystone = nbt.getString("BoundKeystone");
+									MobEntryData.get(world).setEntry(pos, yaw, pitch);
+									src.sendSuccess(() -> Component.literal(
+											String.format("§aMob entry set to %.2f, %.2f, %.2f", pos.x, pos.y, pos.z)
+									), false);
+									return 1;
+								})
+						)
 
-		if (keystone.isEmpty() || !nbt.contains("EnteredPlayers", NbtElement.LIST_TYPE)) {
-			return;
-		}
+						// player entry setter
+						.then(Commands.literal("setPlayerEntry")
+								.executes(ctx -> {
+									CommandSourceStack src = ctx.getSource();
+									ServerLevel world = src.getLevel();
+									ResourceLocation id = world.dimension().location();
+									if (!id.getNamespace().equals("pocket-repose")
+											|| !id.getPath().startsWith("pocket_dimension_")) {
+										src.sendFailure(Component.literal("§cNot in a pocket dimension"));
+										return 0;
+									}
+									Vec3 pos = src.getPosition();
+									float yaw = src.getEntity().getYRot();
+									float pitch = src.getEntity().getXRot();
 
-		UUID sid = nbt.containsUuid(SuitcaseBlockEntity.NBT_SUITCASE_ID)
-				? nbt.getUuid(SuitcaseBlockEntity.NBT_SUITCASE_ID)
-				: null;
+									PlayerEntryData.get(world).setEntry(pos, yaw, pitch);
+									src.sendSuccess(() -> Component.literal(
+											String.format("§aPlayer entry set to %.2f, %.2f, %.2f", pos.x, pos.y, pos.z)
+									), false);
+									return 1;
+								})
+						)
 
-		if (sid != null) {
-			tracker.updateSuitcaseLocation(
-					sid,
-					world.getRegistryKey().getValue().toString(),
-					x, y, z,
-					SuitcaseLocationTracker.LocationType.ITEM_ENTITY
-			);
-		}
+						// reset entry helper (kept from your original)
+						.then(Commands.literal("resetPlayerEntry")
+								.then(Commands.argument("dimension", StringArgumentType.word())
+										.executes(ctx -> resetPocketDimension(ctx, StringArgumentType.getString(ctx, "dimension")))
+								)
+						)
 
-		NbtList players = nbt.getList("EnteredPlayers", NbtElement.COMPOUND_TYPE);
-		for (int i = 0; i < players.size(); i++) {
-			NbtCompound playerData = players.getCompound(i);
-			String uuid = playerData.getString("UUID");
+						// list dimensions
+						.then(Commands.literal("listDimensions")
+								.requires(src -> src.hasPermission(2))
+								.executes(ctx -> {
+									CommandSourceStack src = ctx.getSource();
+									src.sendSuccess(() -> Component.literal("§aPocket Dimensions Loaded:"), false);
+									boolean foundAny = false;
+									for (ServerLevel world : src.getServer().getAllLevels()) {
+										ResourceLocation id = world.dimension().location();
+										String namespace = id.getNamespace();
+										String path = id.getPath();
+										String prefix = "pocket_dimension_";
 
-			SuitcaseLocationTracker.LocationData current = tracker.getLocation(keystone, uuid);
-			if (current == null || current.type != SuitcaseLocationTracker.LocationType.DESTROYED) {
-				tracker.updateLocation(
-						keystone, uuid,
-						world.getRegistryKey().getValue().toString(),
-						sid,
-						x, y, z, yaw, pitch,
-						SuitcaseLocationTracker.LocationType.ITEM_ENTITY
-				);
-			}
-		}
-	}
-	public static final RegistryKey<Biome> VOID_BIOME_KEY =
-			RegistryKey.of(RegistryKeys.BIOME, Identifier.of("pocket-repose", "pocket_islands"));
-	private void registerPocketCommands() {
-		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
-			dispatcher.register(
-					LiteralArgumentBuilder.<ServerCommandSource>literal("pocketRepose")
-
-							// mob entry setter
-							.then(CommandManager.literal("setMobEntry")
-									.executes(ctx -> {
-										ServerCommandSource src = ctx.getSource();
-										ServerWorld world = src.getWorld();
-										Identifier id = world.getRegistryKey().getValue();
-										if (!id.getNamespace().equals("pocket-repose")
-												|| !id.getPath().startsWith("pocket_dimension_")) {
-											src.sendError(Text.literal("§cNot in a pocket dimension"));
-											return 0;
+										if ("pocket-repose".equals(namespace) && path.startsWith(prefix)) {
+											String suffix = path.substring(prefix.length());
+											src.sendSuccess(() -> Component.literal(" " + suffix), false);
+											foundAny = true;
 										}
-										Vec3d pos = src.getPosition();
-										float yaw = src.getEntity().getYaw();
-										float pitch = src.getEntity().getPitch();
+									}
+									if (!foundAny) {
+										src.sendSuccess(() -> Component.literal("§cNo pocket dimensions found."), false);
+									}
+									return 1;
+								})
+						)
 
-										MobEntryData.get(world).setEntry(pos, yaw, pitch);
-										src.sendFeedback(() -> Text.literal(
-												String.format("§aMob entry set to %.2f, %.2f, %.2f", pos.x, pos.y, pos.z)
-										), false);
-										return 1;
-									})
-							)
+						// canCaptureHostile true/false
+						.then(Commands.literal("canCaptureHostile")
+								.requires(src -> src.hasPermission(2))
+								.then(Commands.argument("value", BoolArgumentType.bool())
+										.executes(ctx -> {
+											boolean value = BoolArgumentType.getBool(ctx, "value");
+											setCanCaptureHostile(value);
+											CommandSourceStack src = ctx.getSource();
+											src.sendSuccess(() -> Component.literal(
+													value ? "§aHostile mob capture enabled" : "§cHostile mob capture disabled"
+											), false);
+											return 1;
+										})
+								)
+								.executes(ctx -> {
+									CommandSourceStack src = ctx.getSource();
+									boolean current = getCanCaptureHostile();
+									src.sendSuccess(() -> Component.literal(
+											"§7Hostile mob capture is currently: " + (current ? "§aEnabled" : "§cDisabled")
+									), false);
+									return 1;
+								})
+						)
 
-							// player entry setter
-							.then(CommandManager.literal("setPlayerEntry")
-									.executes(ctx -> {
-										ServerCommandSource src = ctx.getSource();
-										ServerWorld world = src.getWorld();
-										Identifier id = world.getRegistryKey().getValue();
-										if (!id.getNamespace().equals("pocket-repose")
-												|| !id.getPath().startsWith("pocket_dimension_")) {
-											src.sendError(Text.literal("§cNot in a pocket dimension"));
-											return 0;
-										}
-										Vec3d pos = src.getPosition();
-										float yaw = src.getEntity().getYaw();
-										float pitch = src.getEntity().getPitch();
+						// spawnIsland true/false
+						.then(Commands.literal("spawnIsland")
+								.requires(src -> src.hasPermission(2))
+								.then(Commands.argument("value", BoolArgumentType.bool())
+										.executes(ctx -> {
+											boolean value = BoolArgumentType.getBool(ctx, "value");
+											setSpawnIsland(value);
+											CommandSourceStack src = ctx.getSource();
+											src.sendSuccess(() -> Component.literal(
+													value ? "§aIsland structure spawning enabled" : "§cIsland structure spawning disabled (grass cube will spawn)"
+											), false);
+											return 1;
+										})
+								)
+								.executes(ctx -> {
+									CommandSourceStack src = ctx.getSource();
+									boolean current = getSpawnIsland();
+									src.sendSuccess(() -> Component.literal(
+											"§7Island structure spawning is currently: " + (current ? "§aEnabled" : "§cDisabled")
+									), false);
+									return 1;
+								})
+						)
 
-										PlayerEntryData.get(world).setEntry(pos, yaw, pitch);
-										src.sendFeedback(() -> Text.literal(
-												String.format("§aPlayer entry set to %.2f, %.2f, %.2f", pos.x, pos.y, pos.z)
-										), false);
-										return 1;
-									})
-							)
+						// mob blacklist group
+						.then(Commands.literal("mobBlacklist")
+								.requires(src -> src.hasPermission(2))
 
-							// reset entry helper (kept from your original)
-							.then(CommandManager.literal("resetPlayerEntry")
-									.then(CommandManager.argument("dimension", StringArgumentType.word())
-											.executes(ctx -> resetPocketDimension(ctx, StringArgumentType.getString(ctx, "dimension")))
-									)
-							)
+								.then(Commands.literal("add")
+										.then(Commands.argument("entity", StringArgumentType.string())
+												.executes(ctx -> {
+													CommandSourceStack src = ctx.getSource();
+													String entityString = StringArgumentType.getString(ctx, "entity");
 
-							// list dimensions
-							.then(CommandManager.literal("listDimensions")
-									.requires(src -> src.hasPermissionLevel(2))
-									.executes(ctx -> {
-										ServerCommandSource src = ctx.getSource();
-										src.sendFeedback(() -> Text.literal("§aPocket Dimensions Loaded:"), false);
-										boolean foundAny = false;
-										for (ServerWorld world : src.getServer().getWorlds()) {
-											Identifier id = world.getRegistryKey().getValue();
-											String namespace = id.getNamespace();
-											String path = id.getPath();
-											String prefix = "pocket_dimension_";
+													try {
+														ResourceLocation entityId = ResourceLocation.parse(entityString);
+														EntityType<?> entityType = BuiltInRegistries.ENTITY_TYPE.get(entityId);
 
-											if ("pocket-repose".equals(namespace) && path.startsWith(prefix)) {
-												String suffix = path.substring(prefix.length());
-												src.sendFeedback(() -> Text.literal(" " + suffix), false);
-												foundAny = true;
-											}
-										}
-										if (!foundAny) {
-											src.sendFeedback(() -> Text.literal("§cNo pocket dimensions found."), false);
-										}
-										return 1;
-									})
-							)
+														if (entityType == EntityType.PIG && !entityString.equals("minecraft:pig")) {
+															src.sendFailure(Component.literal("§cUnknown entity type: " + entityString));
+															return 0;
+														}
 
-							// canCaptureHostile true/false
-							.then(CommandManager.literal("canCaptureHostile")
-									.requires(src -> src.hasPermissionLevel(2))
-									.then(CommandManager.argument("value", BoolArgumentType.bool())
-											.executes(ctx -> {
-												boolean value = BoolArgumentType.getBool(ctx, "value");
-												setCanCaptureHostile(value);
-												ServerCommandSource src = ctx.getSource();
-												src.sendFeedback(() -> Text.literal(
-														value ? "§aHostile mob capture enabled" : "§cHostile mob capture disabled"
-												), false);
-												return 1;
-											})
-									)
-									.executes(ctx -> {
-										ServerCommandSource src = ctx.getSource();
-										boolean current = getCanCaptureHostile();
-										src.sendFeedback(() -> Text.literal(
-												"§7Hostile mob capture is currently: " + (current ? "§aEnabled" : "§cDisabled")
-										), false);
-										return 1;
-									})
-							)
+														if (entityType == EntityType.PLAYER) {
+															src.sendFailure(Component.literal("§cCannot blacklist players"));
+															return 0;
+														}
 
-							// spawnIsland true/false
-							.then(CommandManager.literal("spawnIsland")
-									.requires(src -> src.hasPermissionLevel(2))
-									.then(CommandManager.argument("value", BoolArgumentType.bool())
-											.executes(ctx -> {
-												boolean value = BoolArgumentType.getBool(ctx, "value");
-												setSpawnIsland(value);
-												ServerCommandSource src = ctx.getSource();
-												src.sendFeedback(() -> Text.literal(
-														value ? "§aIsland structure spawning enabled" : "§cIsland structure spawning disabled (grass cube will spawn)"
-												), false);
-												return 1;
-											})
-									)
-									.executes(ctx -> {
-										ServerCommandSource src = ctx.getSource();
-										boolean current = getSpawnIsland();
-										src.sendFeedback(() -> Text.literal(
-												"§7Island structure spawning is currently: " + (current ? "§aEnabled" : "§cDisabled")
-										), false);
-										return 1;
-									})
-							)
+														addToBlacklist(entityType);
+														src.sendSuccess(() -> Component.literal(
+																"§aAdded " + entityId + " to blacklist"
+														), false);
+														return 1;
+													} catch (Exception e) {
+														src.sendFailure(Component.literal("§cInvalid entity identifier: " + entityString));
+														return 0;
+													}
+												})
+										)
+								)
 
-							// mob blacklist group
-							.then(CommandManager.literal("mobBlacklist")
-									.requires(src -> src.hasPermissionLevel(2))
+								.then(Commands.literal("remove")
+										.then(Commands.argument("entity", StringArgumentType.string())
+												.executes(ctx -> {
+													CommandSourceStack src = ctx.getSource();
+													String entityString = StringArgumentType.getString(ctx, "entity");
 
-									.then(CommandManager.literal("add")
-											.then(CommandManager.argument("entity", StringArgumentType.string())
-													.executes(ctx -> {
-														ServerCommandSource src = ctx.getSource();
-														String entityString = StringArgumentType.getString(ctx, "entity");
+													try {
+														ResourceLocation entityId = ResourceLocation.parse(entityString);
+														EntityType<?> entityType = BuiltInRegistries.ENTITY_TYPE.get(entityId);
 
-														try {
-															Identifier entityId = Identifier.of(entityString);
-															EntityType<?> entityType = Registries.ENTITY_TYPE.get(entityId);
+														if (entityType == EntityType.PIG && !entityString.equals("minecraft:pig")) {
+															src.sendFailure(Component.literal("§cUnknown entity type: " + entityString));
+															return 0;
+														}
 
-															if (entityType == EntityType.PIG && !entityString.equals("minecraft:pig")) {
-																src.sendError(Text.literal("§cUnknown entity type: " + entityString));
-																return 0;
-															}
-
-															if (entityType == EntityType.PLAYER) {
-																src.sendError(Text.literal("§cCannot blacklist players"));
-																return 0;
-															}
-
-															addToBlacklist(entityType);
-															src.sendFeedback(() -> Text.literal(
-																	"§aAdded " + entityId + " to blacklist"
+														boolean removed = removeFromBlacklist(entityType);
+														if (removed) {
+															src.sendSuccess(() -> Component.literal(
+																	"§aRemoved " + entityId + " from blacklist"
 															), false);
-															return 1;
-														} catch (Exception e) {
-															src.sendError(Text.literal("§cInvalid entity identifier: " + entityString));
-															return 0;
+														} else {
+															src.sendSuccess(() -> Component.literal(
+																	"§7" + entityId + " was not in blacklist"
+															), false);
 														}
-													})
-											)
-									)
+														return 1;
+													} catch (Exception e) {
+														src.sendFailure(Component.literal("§cInvalid entity identifier: " + entityString));
+														return 0;
+													}
+												})
+										)
+								)
 
-									.then(CommandManager.literal("remove")
-											.then(CommandManager.argument("entity", StringArgumentType.string())
-													.executes(ctx -> {
-														ServerCommandSource src = ctx.getSource();
-														String entityString = StringArgumentType.getString(ctx, "entity");
+								.then(Commands.literal("list")
+										.executes(ctx -> {
+											CommandSourceStack src = ctx.getSource();
+											Set<EntityType<?>> blacklist = getEntityBlacklist();
 
-														try {
-															Identifier entityId = Identifier.of(entityString);
-															EntityType<?> entityType = Registries.ENTITY_TYPE.get(entityId);
+											if (blacklist.isEmpty()) {
+												src.sendSuccess(() -> Component.literal("§7No entities are blacklisted"), false);
+											} else {
+												src.sendSuccess(() -> Component.literal("§aBlacklisted entities:"), false);
+												blacklist.forEach(entityType -> {
+													ResourceLocation id = BuiltInRegistries.ENTITY_TYPE.getKey(entityType);
+													src.sendSuccess(() -> Component.literal(" " + id), false);
+												});
+											}
+											return 1;
+										})
+								)
 
-															if (entityType == EntityType.PIG && !entityString.equals("minecraft:pig")) {
-																src.sendError(Text.literal("§cUnknown entity type: " + entityString));
-																return 0;
-															}
+								.then(Commands.literal("clear")
+										.executes(ctx -> {
+											CommandSourceStack src = ctx.getSource();
+											int count = getEntityBlacklist().size();
+											clearBlacklist();
+											src.sendSuccess(() -> Component.literal(
+													"§aCleared blacklist (removed " + count + " entities)"
+											), false);
+											return 1;
+										})
+								)
+						)
 
-															boolean removed = removeFromBlacklist(entityType);
-															if (removed) {
-																src.sendFeedback(() -> Text.literal(
-																		"§aRemoved " + entityId + " from blacklist"
-																), false);
-															} else {
-																src.sendFeedback(() -> Text.literal(
-																		"§7" + entityId + " was not in blacklist"
-																), false);
-															}
-															return 1;
-														} catch (Exception e) {
-															src.sendError(Text.literal("§cInvalid entity identifier: " + entityString));
-															return 0;
-														}
-													})
-											)
-									)
+						// allowRecursion true/false
+						.then(Commands.literal("allowRecursion")
+								.requires(src -> src.hasPermission(2))
+								.then(Commands.argument("value", BoolArgumentType.bool())
+										.executes(ctx -> {
+											boolean value = BoolArgumentType.getBool(ctx, "value");
+											setAllowRecursion(value);
 
-									.then(CommandManager.literal("list")
-											.executes(ctx -> {
-												ServerCommandSource src = ctx.getSource();
-												Set<EntityType<?>> blacklist = getEntityBlacklist();
+											CommandSourceStack src = ctx.getSource();
+											src.sendSuccess(() -> Component.literal(
+													value ? "§aSuitcase recursion enabled" : "§cSuitcase recursion disabled"
+											), false);
+											return 1;
+										})
+								)
+								.executes(ctx -> {
+									CommandSourceStack src = ctx.getSource();
+									boolean current = getAllowRecursion();
+									src.sendSuccess(() -> Component.literal(
+											"§7Suitcase recursion is currently: " + (current ? "§aEnabled" : "§cDisabled")
+									), false);
+									return 1;
+								})
+						)
 
-												if (blacklist.isEmpty()) {
-													src.sendFeedback(() -> Text.literal("§7No entities are blacklisted"), false);
-												} else {
-													src.sendFeedback(() -> Text.literal("§aBlacklisted entities:"), false);
-													blacklist.forEach(entityType -> {
-														Identifier id = Registries.ENTITY_TYPE.getId(entityType);
-														src.sendFeedback(() -> Text.literal(" " + id), false);
-													});
-												}
-												return 1;
-											})
-									)
-
-									.then(CommandManager.literal("clear")
-											.executes(ctx -> {
-												ServerCommandSource src = ctx.getSource();
-												int count = getEntityBlacklist().size();
-												clearBlacklist();
-												src.sendFeedback(() -> Text.literal(
-														"§aCleared blacklist (removed " + count + " entities)"
-												), false);
-												return 1;
-											})
-									)
-							)
-
-							// allowRecursion true/false
-							.then(CommandManager.literal("allowRecursion")
-									.requires(src -> src.hasPermissionLevel(2))
-									.then(CommandManager.argument("value", BoolArgumentType.bool())
-											.executes(ctx -> {
-												boolean value = BoolArgumentType.getBool(ctx, "value");
-												setAllowRecursion(value);
-
-												ServerCommandSource src = ctx.getSource();
-												src.sendFeedback(() -> Text.literal(
-														value ? "§aSuitcase recursion enabled" : "§cSuitcase recursion disabled"
-												), false);
-												return 1;
-											})
-									)
-									.executes(ctx -> {
-										ServerCommandSource src = ctx.getSource();
-										boolean current = getAllowRecursion();
-										src.sendFeedback(() -> Text.literal(
-												"§7Suitcase recursion is currently: " + (current ? "§aEnabled" : "§cDisabled")
-										), false);
-										return 1;
-									})
-							)
-
-			);
-		});
+		);
 	}
-	private int resetPocketDimension(CommandContext<ServerCommandSource> ctx, String dimSuffix) {
-		ServerCommandSource src = ctx.getSource();
 
-		Identifier dimId = Identifier.of("pocket-repose", "pocket_dimension_" + dimSuffix);
-		RegistryKey<World> worldKey = RegistryKey.of(RegistryKeys.WORLD, dimId);
-		ServerWorld targetWorld = src.getServer().getWorld(worldKey);
+	private static int resetPocketDimension(CommandContext<CommandSourceStack> ctx, String dimSuffix) {
+		CommandSourceStack src = ctx.getSource();
+
+		ResourceLocation dimId = ResourceLocation.fromNamespaceAndPath(MOD_ID, "pocket_dimension_" + dimSuffix);
+		ResourceKey<Level> worldKey = ResourceKey.create(Registries.DIMENSION, dimId);
+		ServerLevel targetWorld = src.getServer().getLevel(worldKey);
 
 		if (targetWorld == null) {
-			src.sendError(Text.literal("§cPocket dimension '" + dimSuffix + "' not found"));
+			src.sendFailure(Component.literal("§cPocket dimension '" + dimSuffix + "' not found"));
 			return 0;
 		}
 
 		BlockPos plankPos = new BlockPos(17, 96, 9);
-		targetWorld.setBlockState(plankPos, Blocks.OAK_PLANKS.getDefaultState());
+		targetWorld.setBlockAndUpdate(plankPos, net.minecraft.world.level.block.Blocks.OAK_PLANKS.defaultBlockState());
 
 		for (int y = 97; y <= 99; y++) {
 			BlockPos airPos = new BlockPos(17, y, 9);
-			targetWorld.setBlockState(airPos, Blocks.AIR.getDefaultState());
+			targetWorld.setBlockAndUpdate(airPos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState());
 		}
 
 		BlockPos portalPos = new BlockPos(17, 100, 9);
-		targetWorld.setBlockState(portalPos, ModBlocks.PORTAL.getDefaultState());
+		targetWorld.setBlockAndUpdate(portalPos, ModBlocks.PORTAL.get().defaultBlockState());
 
 		PlayerEntryData playerData = PlayerEntryData.get(targetWorld);
-		playerData.setEntry(new Vec3d(17.5, 97.0, 9.5), 0f, 0f);
+		playerData.setEntry(new Vec3(17.5, 97.0, 9.5), 0f, 0f);
 
-		src.sendFeedback(() -> Text.literal("§aPocket dimension '" + dimSuffix + "' entry reset"), false);
+		src.sendSuccess(() -> Component.literal("§aPocket dimension '" + dimSuffix + "' entry reset"), false);
 		return 1;
 	}
-	private void registerPlayerEntrySetter() {
-		UseItemCallback.EVENT.register((player, world, hand) -> {
-			ItemStack s = player.getStackInHand(hand);
-			if (world.isClient || hand != net.minecraft.util.Hand.MAIN_HAND || s.getItem() != Items.BONE)
-				return TypedActionResult.pass(s);
 
-			if (!(world instanceof ServerWorld sw)) return TypedActionResult.pass(s);
-			Identifier id = sw.getRegistryKey().getValue();
-			if (!"pocket-repose".equals(id.getNamespace())
-					|| !id.getPath().startsWith("pocket_dimension_"))
-				return TypedActionResult.pass(s);
+	private static void onRightClickItem(PlayerInteractEvent.RightClickItem event) {
+		Player player = event.getEntity();
+		Level world = event.getLevel();
+		InteractionHand hand = event.getHand();
+		ItemStack stack = event.getItemStack();
 
-			Vec3d pos = player.getPos();
-			float yaw = player.getYaw();
-			float pitch = player.getPitch();
+		if (world.isClientSide || hand != InteractionHand.MAIN_HAND) return;
+		if (!(world instanceof ServerLevel sw)) return;
+
+		if (stack.getItem() != Items.BONE && stack.getItem() != Items.LEAD) return;
+
+		ResourceLocation id = sw.dimension().location();
+		if (!"pocket-repose".equals(id.getNamespace())
+				|| !id.getPath().startsWith("pocket_dimension_")) {
+			return;
+		}
+
+		Vec3 pos = player.position();
+		float yaw = player.getYRot();
+		float pitch = player.getXRot();
+
+		if (stack.getItem() == Items.BONE) {
 			PlayerEntryData.get(sw).setEntry(pos, yaw, pitch);
-
-			player.sendMessage(Text.literal(
+			player.displayClientMessage(Component.literal(
 					String.format("§aPlayer entry location set to %.1f, %.1f, %.1f", pos.x, pos.y, pos.z)
 			), true);
-
-			return TypedActionResult.success(s);
-		});
-	}
-	private void registerMobEntrySetter() {
-		UseItemCallback.EVENT.register((player, world, hand) -> {
-			ItemStack stack = player.getStackInHand(hand);
-			if (world.isClient || hand != net.minecraft.util.Hand.MAIN_HAND) {
-				return TypedActionResult.pass(stack);
-			}
-			if (stack.getItem() != Items.LEAD) {
-				return TypedActionResult.pass(stack);
-			}
-			if (!(world instanceof ServerWorld sw)) {
-				return TypedActionResult.pass(stack);
-			}
-			Identifier id = sw.getRegistryKey().getValue();
-			if (!"pocket-repose".equals(id.getNamespace())
-					|| !id.getPath().startsWith("pocket_dimension_")) {
-				return TypedActionResult.pass(stack);
-			}
-
-			Vec3d pos = player.getPos();
-			float yaw = player.getYaw();
-			float pitch = player.getPitch();
+		} else {
 			MobEntryData.get(sw).setEntry(pos, yaw, pitch);
-
-			player.sendMessage(Text.literal(
+			player.displayClientMessage(Component.literal(
 					String.format("§aMob entry location set to %.1f, %.1f, %.1f", pos.x, pos.y, pos.z)
 			), true);
+		}
 
-			return TypedActionResult.success(stack);
-		});
+		event.setCanceled(true);
+		event.setCancellationResult(InteractionResult.SUCCESS);
 	}
+
 	private static boolean canCaptureHostile = false;
 	private static boolean spawnIsland = true;
 	private static boolean allowRecursion = true;
+
 	public static boolean getAllowRecursion() {
 		return allowRecursion;
 	}
+
 	public static void setAllowRecursion(boolean value) {
 		allowRecursion = value;
 	}
+
 	private static Set<EntityType<?>> entityBlacklist = new HashSet<>();
+
 	public static boolean getCanCaptureHostile() {
 		return canCaptureHostile;
 	}
+
 	public static void setCanCaptureHostile(boolean value) {
 		canCaptureHostile = value;
 	}
+
 	public static boolean getSpawnIsland() {
 		return spawnIsland;
 	}
+
 	public static void setSpawnIsland(boolean value) {
 		spawnIsland = value;
 	}
+
 	public static Set<EntityType<?>> getEntityBlacklist() {
 		return new HashSet<>(entityBlacklist);
 	}
+
 	public static void addToBlacklist(EntityType<?> entityType) {
 		entityBlacklist.add(entityType);
 	}
+
 	public static boolean removeFromBlacklist(EntityType<?> entityType) {
 		return entityBlacklist.remove(entityType);
 	}
+
 	public static boolean isBlacklisted(EntityType<?> entityType) {
 		return entityBlacklist.contains(entityType);
 	}
+
 	public static void clearBlacklist() {
 		entityBlacklist.clear();
 	}
-	private boolean isHostileMob(LivingEntity mob) {
-		return mob instanceof HostileEntity ||
-				mob instanceof SpiderEntity ||
-				mob instanceof EndermanEntity ||
-				mob instanceof PiglinEntity ||
-				mob instanceof ZombifiedPiglinEntity ||
-				(mob instanceof WolfEntity wolf && wolf.hasAngerTime());
+
+	private static boolean isHostileMob(LivingEntity mob) {
+		return mob instanceof Monster ||
+				mob instanceof Spider ||
+				mob instanceof EnderMan ||
+				mob instanceof Piglin ||
+				mob instanceof ZombifiedPiglin ||
+				(mob instanceof Wolf wolf && wolf.isAngry());
 	}
-	private void registerSuitcaseMobTeleport() {
-		UseEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
-			if (world.isClient) return ActionResult.PASS;
 
-			if (hand != net.minecraft.util.Hand.MAIN_HAND) return ActionResult.PASS;
+	private static void onEntityInteract(PlayerInteractEvent.EntityInteract event) {
+		InteractionResult result = suitcaseMobTeleport(event);
+		if (result == InteractionResult.PASS) {
+			result = keyRescueMob(event);
+		}
 
-			ItemStack stack = player.getStackInHand(hand);
-			if (!(stack.getItem() instanceof BlockItem bi)) return ActionResult.PASS;
+		if (result != InteractionResult.PASS) {
+			event.setCanceled(true);
+			event.setCancellationResult(result);
+		}
+	}
 
-			Block heldBlock = bi.getBlock();
-			if (!(heldBlock instanceof SuitcaseBlock)) return ActionResult.PASS;
+	private static InteractionResult suitcaseMobTeleport(PlayerInteractEvent.EntityInteract event) {
+		Player player = event.getEntity();
+		Level world = event.getLevel();
+		InteractionHand hand = event.getHand();
+		Entity entity = event.getTarget();
 
-			if (entity instanceof PlayerEntity) {
-				player.sendMessage(Text.literal("☒"), true);
-				world.playSound(null,
-						player.getX(), player.getY(), player.getZ(),
-						SoundEvents.ENTITY_ZOMBIE_ATTACK_WOODEN_DOOR,
-						SoundCategory.PLAYERS,
-						0.3f, 1.5f
-				);
-				return ActionResult.FAIL;
-			}
+		if (world.isClientSide) return InteractionResult.PASS;
 
-			NbtComponent beData = stack.get(DataComponentTypes.BLOCK_ENTITY_DATA);
-			if (beData == null) {
-				player.sendMessage(Text.literal("☒"), true);
-				world.playSound(null,
-						player.getX(), player.getY(), player.getZ(),
-						SoundEvents.ENTITY_ZOMBIE_ATTACK_WOODEN_DOOR,
-						SoundCategory.PLAYERS,
-						0.3f, 1.5f
-				);
-				return ActionResult.FAIL;
-			}
+		if (hand != InteractionHand.MAIN_HAND) return InteractionResult.PASS;
 
-			NbtCompound beNbt = beData.copyNbt();
-			if (!beNbt.contains("BoundKeystone")) {
-				player.sendMessage(Text.literal("☒"), true);
-				world.playSound(null,
-						player.getX(), player.getY(), player.getZ(),
-						SoundEvents.ENTITY_ZOMBIE_ATTACK_WOODEN_DOOR,
-						SoundCategory.PLAYERS,
-						0.3f, 1.5f
-				);
-				return ActionResult.FAIL;
-			}
+		ItemStack stack = player.getItemInHand(hand);
+		if (!(stack.getItem() instanceof BlockItem bi)) return InteractionResult.PASS;
 
-			if (beNbt.getBoolean("Locked")) {
-				player.sendMessage(Text.literal("☒"), true);
-				world.playSound(null,
-						player.getX(), player.getY(), player.getZ(),
-						SoundEvents.ENTITY_ZOMBIE_ATTACK_WOODEN_DOOR,
-						SoundCategory.PLAYERS,
-						0.3f, 1.5f
-				);
-				return ActionResult.FAIL;
-			}
+		net.minecraft.world.level.block.Block heldBlock = bi.getBlock();
+		if (!(heldBlock instanceof SuitcaseBlock)) return InteractionResult.PASS;
 
-			String keystone = beNbt.getString("BoundKeystone");
-			Identifier dimId = Identifier.of("pocket-repose", "pocket_dimension_" + keystone);
-			RegistryKey<World> dimKey = RegistryKey.of(RegistryKeys.WORLD, dimId);
-			ServerWorld targetWorld = world.getServer().getWorld(dimKey);
-
-			if (targetWorld == null) {
-				player.sendMessage(Text.literal("§cPocket dimension not found"), true);
-				return ActionResult.FAIL;
-			}
-
-			if (!(entity instanceof LivingEntity mob)) return ActionResult.PASS;
-
-			if (isBlacklisted(mob.getType())) {
-				player.sendMessage(Text.literal("☒"), true);
-				world.playSound(null,
-						player.getX(), player.getY(), player.getZ(),
-						SoundEvents.ENTITY_ZOMBIE_ATTACK_WOODEN_DOOR,
-						SoundCategory.PLAYERS,
-						0.3f, 1.5f
-				);
-				return ActionResult.FAIL;
-			}
-
-			if (!canCaptureHostile && isHostileMob(mob)) {
-				player.sendMessage(Text.literal("☒"), true);
-				world.playSound(null,
-						player.getX(), player.getY(), player.getZ(),
-						SoundEvents.ENTITY_ZOMBIE_ATTACK_WOODEN_DOOR,
-						SoundCategory.PLAYERS,
-						0.3f, 1.5f
-				);
-				return ActionResult.FAIL;
-			}
-
-			UUID suitcaseId = ensureSuitcaseIdOnSuitcaseStack(stack, beNbt);
-			stack.set(DataComponentTypes.BLOCK_ENTITY_DATA, NbtComponent.of(beNbt));
-
-			SuitcaseLocationTracker tracker = SuitcaseLocationTracker.get(world.getServer());
-			if (tracker != null && beNbt.contains("EnteredPlayers", NbtElement.LIST_TYPE)) {
-				String dimStr = ((ServerPlayerEntity) player).getServerWorld().getRegistryKey().getValue().toString();
-
-				NbtList players = beNbt.getList("EnteredPlayers", NbtElement.COMPOUND_TYPE);
-				for (int i = 0; i < players.size(); i++) {
-					NbtCompound playerData = players.getCompound(i);
-					String uuid = playerData.getString("UUID");
-
-					UUID expected = tracker.getLastSuitcase(keystone, uuid);
-					if (expected != null && expected.equals(suitcaseId)) {
-						tracker.updateLocation(
-								keystone, uuid,
-								dimStr, suitcaseId,
-								player.getX(), player.getY() + 1.0, player.getZ(),
-								player.getYaw(), player.getPitch(),
-								SuitcaseLocationTracker.LocationType.ITEM_ENTITY
-						);
-					}
-				}
-			}
-
-			MobEntryData data = MobEntryData.get(targetWorld);
-			Vec3d dest = data.getEntryPos();
-			float yaw = data.getEntryYaw();
-			float pitch = data.getEntryPitch();
-
-			TeleportTarget target = new TeleportTarget(
-					targetWorld,
-					dest,
-					Vec3d.ZERO,
-					yaw,
-					pitch,
-					TeleportTarget.NO_OP
-			);
-
-			mob.teleportTo(target);
-
+		if (entity instanceof Player) {
+			player.displayClientMessage(Component.literal("☒"), true);
 			world.playSound(null,
 					player.getX(), player.getY(), player.getZ(),
-					SoundEvents.ITEM_BUNDLE_DROP_CONTENTS,
-					SoundCategory.PLAYERS,
-					2.0f, 1.0f
+					SoundEvents.ZOMBIE_ATTACK_WOODEN_DOOR,
+					SoundSource.PLAYERS,
+					0.3f, 1.5f
 			);
+			return InteractionResult.FAIL;
+		}
 
+		CustomData beData = stack.get(DataComponents.BLOCK_ENTITY_DATA);
+		if (beData == null) {
+			player.displayClientMessage(Component.literal("☒"), true);
 			world.playSound(null,
 					player.getX(), player.getY(), player.getZ(),
-					SoundEvents.ENTITY_ITEM_PICKUP,
-					SoundCategory.PLAYERS,
-					0.5f, 1.0f
+					SoundEvents.ZOMBIE_ATTACK_WOODEN_DOOR,
+					SoundSource.PLAYERS,
+					0.3f, 1.5f
 			);
+			return InteractionResult.FAIL;
+		}
 
-			return ActionResult.SUCCESS;
-		});
+		CompoundTag beNbt = beData.copyTag();
+		if (!beNbt.contains("BoundKeystone")) {
+			player.displayClientMessage(Component.literal("☒"), true);
+			world.playSound(null,
+					player.getX(), player.getY(), player.getZ(),
+					SoundEvents.ZOMBIE_ATTACK_WOODEN_DOOR,
+					SoundSource.PLAYERS,
+					0.3f, 1.5f
+			);
+			return InteractionResult.FAIL;
+		}
+
+		if (beNbt.getBoolean("Locked")) {
+			player.displayClientMessage(Component.literal("☒"), true);
+			world.playSound(null,
+					player.getX(), player.getY(), player.getZ(),
+					SoundEvents.ZOMBIE_ATTACK_WOODEN_DOOR,
+					SoundSource.PLAYERS,
+					0.3f, 1.5f
+			);
+			return InteractionResult.FAIL;
+		}
+
+		String keystone = beNbt.getString("BoundKeystone");
+		ResourceLocation dimId = ResourceLocation.fromNamespaceAndPath(MOD_ID, "pocket_dimension_" + keystone);
+		ResourceKey<Level> dimKey = ResourceKey.create(Registries.DIMENSION, dimId);
+		ServerLevel targetWorld = world.getServer().getLevel(dimKey);
+
+		if (targetWorld == null) {
+			player.displayClientMessage(Component.literal("§cPocket dimension not found"), true);
+			return InteractionResult.FAIL;
+		}
+
+		if (!(entity instanceof LivingEntity mob)) return InteractionResult.PASS;
+
+		if (isBlacklisted(mob.getType())) {
+			player.displayClientMessage(Component.literal("☒"), true);
+			world.playSound(null,
+					player.getX(), player.getY(), player.getZ(),
+					SoundEvents.ZOMBIE_ATTACK_WOODEN_DOOR,
+					SoundSource.PLAYERS,
+					0.3f, 1.5f
+			);
+			return InteractionResult.FAIL;
+		}
+
+		if (!canCaptureHostile && isHostileMob(mob)) {
+			player.displayClientMessage(Component.literal("☒"), true);
+			world.playSound(null,
+					player.getX(), player.getY(), player.getZ(),
+					SoundEvents.ZOMBIE_ATTACK_WOODEN_DOOR,
+					SoundSource.PLAYERS,
+					0.3f, 1.5f
+			);
+			return InteractionResult.FAIL;
+		}
+
+		UUID suitcaseId = ensureSuitcaseIdOnSuitcaseStack(stack, beNbt);
+		stack.set(DataComponents.BLOCK_ENTITY_DATA, CustomData.of(beNbt));
+
+		SuitcaseLocationTracker tracker = SuitcaseLocationTracker.get(world.getServer());
+		if (tracker != null && beNbt.contains("EnteredPlayers", Tag.TAG_LIST)) {
+			String dimStr = ((ServerPlayer) player).serverLevel().dimension().location().toString();
+
+			ListTag players = beNbt.getList("EnteredPlayers", Tag.TAG_COMPOUND);
+			for (int i = 0; i < players.size(); i++) {
+				CompoundTag playerData = players.getCompound(i);
+				String uuid = playerData.getString("UUID");
+
+				UUID expected = tracker.getLastSuitcase(keystone, uuid);
+				if (expected != null && expected.equals(suitcaseId)) {
+					tracker.updateLocation(
+							keystone, uuid,
+							dimStr, suitcaseId,
+							player.getX(), player.getY() + 1.0, player.getZ(),
+							player.getYRot(), player.getXRot(),
+							SuitcaseLocationTracker.LocationType.ITEM_ENTITY
+					);
+				}
+			}
+		}
+
+		MobEntryData data = MobEntryData.get(targetWorld);
+		Vec3 dest = data.getEntryPos();
+		float yaw = data.getEntryYaw();
+		float pitch = data.getEntryPitch();
+
+		DimensionTransition target = new DimensionTransition(
+				targetWorld,
+				dest,
+				Vec3.ZERO,
+				yaw,
+				pitch,
+				DimensionTransition.DO_NOTHING
+		);
+
+		mob.changeDimension(target);
+
+		world.playSound(null,
+				player.getX(), player.getY(), player.getZ(),
+				SoundEvents.BUNDLE_DROP_CONTENTS,
+				SoundSource.PLAYERS,
+				2.0f, 1.0f
+		);
+
+		world.playSound(null,
+				player.getX(), player.getY(), player.getZ(),
+				SoundEvents.ITEM_PICKUP,
+				SoundSource.PLAYERS,
+				0.5f, 1.0f
+		);
+
+		return InteractionResult.SUCCESS;
 	}
-	private void registerKeyRescueMob() {
-		UseEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
-			if (world.isClient) return ActionResult.PASS;
-			if (!(player instanceof ServerPlayerEntity sp)) return ActionResult.PASS;
 
-			ItemStack held = sp.getStackInHand(hand);
-			if (!(held.getItem() instanceof KeystoneItem)) return ActionResult.PASS;
+	private static InteractionResult keyRescueMob(PlayerInteractEvent.EntityInteract event) {
+		Player player = event.getEntity();
+		Level world = event.getLevel();
+		InteractionHand hand = event.getHand();
+		Entity entity = event.getTarget();
 
-			Identifier dimId = sp.getWorld().getRegistryKey().getValue();
-			String namespace = dimId.getNamespace();
-			String path = dimId.getPath();
-			String prefix = "pocket_dimension_";
+		if (world.isClientSide) return InteractionResult.PASS;
+		if (!(player instanceof ServerPlayer sp)) return InteractionResult.PASS;
 
-			if (!namespace.equals("pocket-repose") || !path.startsWith(prefix)) return ActionResult.PASS;
+		ItemStack held = sp.getItemInHand(hand);
+		if (!(held.getItem() instanceof KeystoneItem)) return InteractionResult.PASS;
 
-			String keystoneName = path.substring(prefix.length());
+		ResourceLocation dimId = sp.level().dimension().location();
+		String namespace = dimId.getNamespace();
+		String path = dimId.getPath();
+		String prefix = "pocket_dimension_";
 
-			if (!(entity instanceof LivingEntity mob)) return ActionResult.PASS;
+		if (!namespace.equals("pocket-repose") || !path.startsWith(prefix)) return InteractionResult.PASS;
 
-			MinecraftServer server = sp.getServer();
-			if (server == null) return ActionResult.FAIL;
+		String keystoneName = path.substring(prefix.length());
 
-			SuitcaseLocationTracker tracker = SuitcaseLocationTracker.get(server);
-			String playerUuid = sp.getUuidAsString();
+		if (!(entity instanceof LivingEntity mob)) return InteractionResult.PASS;
 
-			UUID expectedSuitcaseId = (tracker == null) ? null : tracker.getLastSuitcase(keystoneName, playerUuid);
+		MinecraftServer server = sp.getServer();
+		if (server == null) return InteractionResult.FAIL;
 
-			boolean teleported = false;
-			ServerWorld targetWorldUsed = null;
-			Vec3d targetPosUsed = null;
+		SuitcaseLocationTracker tracker = SuitcaseLocationTracker.get(server);
+		String playerUuid = sp.getStringUUID();
 
-			if (tracker != null) {
-				SuitcaseLocationTracker.LocationData loc = tracker.getLocation(keystoneName, playerUuid);
-				if (loc != null && loc.type != SuitcaseLocationTracker.LocationType.DESTROYED) {
+		UUID expectedSuitcaseId = (tracker == null) ? null : tracker.getLastSuitcase(keystoneName, playerUuid);
 
-					if (expectedSuitcaseId == null || (loc.suitcaseId != null && expectedSuitcaseId.equals(loc.suitcaseId))) {
-						ServerWorld target = worldFromId(server, loc.dimensionId);
-						if (target != null) {
-							Vec3d dest = new Vec3d(loc.x, loc.y, loc.z);
-							if (teleportMobTo(mob, target, dest)) {
-								teleported = true;
-								targetWorldUsed = target;
-								targetPosUsed = dest;
-							}
-						}
-					}
-				}
-			}
+		boolean teleported = false;
+		ServerLevel targetWorldUsed = null;
+		Vec3 targetPosUsed = null;
 
-			if (!teleported && expectedSuitcaseId != null) {
-				TeleportResult res = findSuitcaseAndTeleportMob(server, mob, keystoneName, expectedSuitcaseId);
-				if (res.success) {
-					teleported = true;
-					targetWorldUsed = res.world;
-					targetPosUsed = res.pos;
-				}
-			}
+		if (tracker != null) {
+			SuitcaseLocationTracker.LocationData loc = tracker.getLocation(keystoneName, playerUuid);
+			if (loc != null && loc.type != SuitcaseLocationTracker.LocationType.DESTROYED) {
 
-			if (!teleported && tracker != null) {
-				SuitcaseLocationTracker.LocationData loc = tracker.getLocation(keystoneName, playerUuid);
-				if (loc != null) {
-					ServerWorld target = worldFromId(server, loc.dimensionId);
+				if (expectedSuitcaseId == null || (loc.suitcaseId != null && expectedSuitcaseId.equals(loc.suitcaseId))) {
+					ServerLevel target = worldFromId(server, loc.dimensionId);
 					if (target != null) {
-						Vec3d dest = new Vec3d(loc.x, loc.y, loc.z);
-						sp.sendMessage(Text.literal("§6No suitcase found — returning mob to last known point"), true);
+						Vec3 dest = new Vec3(loc.x, loc.y, loc.z);
 						if (teleportMobTo(mob, target, dest)) {
 							teleported = true;
 							targetWorldUsed = target;
@@ -1096,39 +1085,65 @@ public class PocketRepose implements ModInitializer {
 					}
 				}
 			}
+		}
 
-			if (!teleported) {
-				sp.sendMessage(Text.literal("§cNo suitcase exit found for mob"), true);
-				return ActionResult.FAIL;
+		if (!teleported && expectedSuitcaseId != null) {
+			TeleportResult res = findSuitcaseAndTeleportMob(server, mob, keystoneName, expectedSuitcaseId);
+			if (res.success) {
+				teleported = true;
+				targetWorldUsed = res.world;
+				targetPosUsed = res.pos;
 			}
+		}
 
-			sp.getWorld().playSound(
+		if (!teleported && tracker != null) {
+			SuitcaseLocationTracker.LocationData loc = tracker.getLocation(keystoneName, playerUuid);
+			if (loc != null) {
+				ServerLevel target = worldFromId(server, loc.dimensionId);
+				if (target != null) {
+					Vec3 dest = new Vec3(loc.x, loc.y, loc.z);
+					sp.displayClientMessage(Component.literal("§6No suitcase found — returning mob to last known point"), true);
+					if (teleportMobTo(mob, target, dest)) {
+						teleported = true;
+						targetWorldUsed = target;
+						targetPosUsed = dest;
+					}
+				}
+			}
+		}
+
+		if (!teleported) {
+			sp.displayClientMessage(Component.literal("§cNo suitcase exit found for mob"), true);
+			return InteractionResult.FAIL;
+		}
+
+		sp.level().playSound(
+				null,
+				sp.getX(), sp.getY(), sp.getZ(),
+				SoundEvents.BUNDLE_DROP_CONTENTS,
+				SoundSource.PLAYERS,
+				2.0f, 1.0f
+		);
+
+		if (targetWorldUsed != null && targetPosUsed != null) {
+			targetWorldUsed.playSound(
 					null,
-					sp.getX(), sp.getY(), sp.getZ(),
-					SoundEvents.ITEM_BUNDLE_DROP_CONTENTS,
-					SoundCategory.PLAYERS,
+					targetPosUsed.x, targetPosUsed.y, targetPosUsed.z,
+					SoundEvents.BUNDLE_DROP_CONTENTS,
+					SoundSource.PLAYERS,
 					2.0f, 1.0f
 			);
+		}
 
-			if (targetWorldUsed != null && targetPosUsed != null) {
-				targetWorldUsed.playSound(
-						null,
-						targetPosUsed.x, targetPosUsed.y, targetPosUsed.z,
-						SoundEvents.ITEM_BUNDLE_DROP_CONTENTS,
-						SoundCategory.PLAYERS,
-						2.0f, 1.0f
-				);
-			}
-
-			return ActionResult.SUCCESS;
-		});
+		return InteractionResult.SUCCESS;
 	}
+
 	private static class TeleportResult {
 		final boolean success;
-		final ServerWorld world;
-		final Vec3d pos;
+		final ServerLevel world;
+		final Vec3 pos;
 
-		TeleportResult(boolean success, ServerWorld world, Vec3d pos) {
+		TeleportResult(boolean success, ServerLevel world, Vec3 pos) {
 			this.success = success;
 			this.world = world;
 			this.pos = pos;
@@ -1138,94 +1153,98 @@ public class PocketRepose implements ModInitializer {
 			return new TeleportResult(false, null, null);
 		}
 	}
-	private static boolean teleportMobTo(LivingEntity mob, ServerWorld targetWorld, Vec3d pos) {
-		TeleportTarget target = new TeleportTarget(
+
+	private static boolean teleportMobTo(LivingEntity mob, ServerLevel targetWorld, Vec3 pos) {
+		DimensionTransition target = new DimensionTransition(
 				targetWorld,
 				pos,
-				Vec3d.ZERO,
-				mob.getYaw(),
-				mob.getPitch(),
-				TeleportTarget.NO_OP
+				Vec3.ZERO,
+				mob.getYRot(),
+				mob.getXRot(),
+				DimensionTransition.DO_NOTHING
 		);
-		mob.teleportTo(target);
+		mob.changeDimension(target);
 		return true;
 	}
-	private static ServerWorld worldFromId(MinecraftServer server, String dimStr) {
-		if (dimStr == null || dimStr.isEmpty()) return server.getWorld(World.OVERWORLD);
 
-		Identifier id = Identifier.tryParse(dimStr);
-		if (id == null) return server.getWorld(World.OVERWORLD);
+	private static ServerLevel worldFromId(MinecraftServer server, String dimStr) {
+		if (dimStr == null || dimStr.isEmpty()) return server.getLevel(Level.OVERWORLD);
 
-		RegistryKey<World> key = RegistryKey.of(RegistryKeys.WORLD, id);
-		ServerWorld w = server.getWorld(key);
-		return (w != null) ? w : server.getWorld(World.OVERWORLD);
+		ResourceLocation id = ResourceLocation.tryParse(dimStr);
+		if (id == null) return server.getLevel(Level.OVERWORLD);
+
+		ResourceKey<Level> key = ResourceKey.create(Registries.DIMENSION, id);
+		ServerLevel w = server.getLevel(key);
+		return (w != null) ? w : server.getLevel(Level.OVERWORLD);
 	}
+
 	private static boolean isSuitcaseWithKeystoneAndId(ItemStack stack, String keystoneName, UUID expectedSuitcaseId) {
 		if (stack.isEmpty() || !(stack.getItem() instanceof BlockItem bi)
 				|| !(bi.getBlock() instanceof SuitcaseBlock)) {
 			return false;
 		}
 
-		NbtComponent beTag = stack.get(DataComponentTypes.BLOCK_ENTITY_DATA);
+		CustomData beTag = stack.get(DataComponents.BLOCK_ENTITY_DATA);
 		if (beTag == null) return false;
 
-		NbtCompound nbt = beTag.copyNbt();
+		CompoundTag nbt = beTag.copyTag();
 		if (!keystoneName.equals(nbt.getString("BoundKeystone"))) return false;
 
-		if (!nbt.containsUuid(SuitcaseBlockEntity.NBT_SUITCASE_ID)) return false;
-		UUID id = nbt.getUuid(SuitcaseBlockEntity.NBT_SUITCASE_ID);
+		if (!nbt.hasUUID(SuitcaseBlockEntity.NBT_SUITCASE_ID)) return false;
+		UUID id = nbt.getUUID(SuitcaseBlockEntity.NBT_SUITCASE_ID);
 
 		return expectedSuitcaseId.equals(id);
 	}
+
 	private static TeleportResult findSuitcaseAndTeleportMob(MinecraftServer server, LivingEntity mob, String keystoneName, UUID expectedSuitcaseId) {
 
-		for (ServerPlayerEntity online : server.getPlayerManager().getPlayerList()) {
-			for (int i = 0; i < online.getInventory().size(); i++) {
-				ItemStack stack = online.getInventory().getStack(i);
+		for (ServerPlayer online : server.getPlayerList().getPlayers()) {
+			for (int i = 0; i < online.getInventory().getContainerSize(); i++) {
+				ItemStack stack = online.getInventory().getItem(i);
 				if (isSuitcaseWithKeystoneAndId(stack, keystoneName, expectedSuitcaseId)) {
-					ServerWorld w = online.getServerWorld();
-					Vec3d dest = new Vec3d(online.getX(), online.getY() + 1.0, online.getZ());
+					ServerLevel w = online.serverLevel();
+					Vec3 dest = new Vec3(online.getX(), online.getY() + 1.0, online.getZ());
 					teleportMobTo(mob, w, dest);
 					return new TeleportResult(true, w, dest);
 				}
 			}
 		}
 
-		for (ServerWorld w : server.getWorlds()) {
-			for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
-				if (p.getServerWorld() != w) continue;
+		for (ServerLevel w : server.getAllLevels()) {
+			for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+				if (p.serverLevel() != w) continue;
 
-				Box box = p.getBoundingBox().expand(256);
-				List<ItemEntity> items = w.getEntitiesByClass(ItemEntity.class, box,
-						item -> isSuitcaseWithKeystoneAndId(item.getStack(), keystoneName, expectedSuitcaseId));
+				AABB box = p.getBoundingBox().inflate(256);
+				List<ItemEntity> items = w.getEntitiesOfClass(ItemEntity.class, box,
+						item -> isSuitcaseWithKeystoneAndId(item.getItem(), keystoneName, expectedSuitcaseId));
 
 				if (!items.isEmpty()) {
 					ItemEntity suitcaseItem = items.get(0);
-					Vec3d dest = new Vec3d(suitcaseItem.getX(), suitcaseItem.getY() + 1.0, suitcaseItem.getZ());
+					Vec3 dest = new Vec3(suitcaseItem.getX(), suitcaseItem.getY() + 1.0, suitcaseItem.getZ());
 					teleportMobTo(mob, w, dest);
 					return new TeleportResult(true, w, dest);
 				}
 			}
 		}
 
-		for (ServerPlayerEntity online : server.getPlayerManager().getPlayerList()) {
-			ServerWorld w = online.getServerWorld();
-			ChunkPos center = online.getChunkPos();
+		for (ServerPlayer online : server.getPlayerList().getPlayers()) {
+			ServerLevel w = online.serverLevel();
+			ChunkPos center = online.chunkPosition();
 			int radius = 8;
 
 			for (int cx = center.x - radius; cx <= center.x + radius; cx++) {
 				for (int cz = center.z - radius; cz <= center.z + radius; cz++) {
-					if (!w.isChunkLoaded(cx, cz)) continue;
+					if (!w.hasChunk(cx, cz)) continue;
 
-					WorldChunk chunk = w.getChunk(cx, cz);
+					LevelChunk chunk = w.getChunk(cx, cz);
 					for (BlockEntity be : chunk.getBlockEntities().values()) {
-						if (!(be instanceof Inventory inv)) continue;
+						if (!(be instanceof Container inv)) continue;
 
-						for (int i = 0; i < inv.size(); i++) {
-							ItemStack stack = inv.getStack(i);
+						for (int i = 0; i < inv.getContainerSize(); i++) {
+							ItemStack stack = inv.getItem(i);
 							if (isSuitcaseWithKeystoneAndId(stack, keystoneName, expectedSuitcaseId)) {
-								BlockPos cpos = be.getPos();
-								Vec3d dest = new Vec3d(cpos.getX() + 0.5, cpos.getY() + 1.0, cpos.getZ() + 0.5);
+								BlockPos cpos = be.getBlockPos();
+								Vec3 dest = new Vec3(cpos.getX() + 0.5, cpos.getY() + 1.0, cpos.getZ() + 0.5);
 								teleportMobTo(mob, w, dest);
 								return new TeleportResult(true, w, dest);
 							}

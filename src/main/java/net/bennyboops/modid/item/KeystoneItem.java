@@ -2,45 +2,51 @@ package net.bennyboops.modid.item;
 
 import net.bennyboops.modid.PocketRepose;
 import net.bennyboops.modid.block.ModBlocks;
-import net.bennyboops.modid.world.PortalChunkGenerator;
-import net.minecraft.block.Block;
-import net.minecraft.block.Blocks;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.CustomModelDataComponent;
-import net.minecraft.component.type.ItemEnchantmentsComponent;
-import net.minecraft.enchantment.Enchantment;
-import net.minecraft.enchantment.Enchantments;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.decoration.ItemFrameEntity;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.tooltip.TooltipType;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtIo;
-import net.minecraft.nbt.NbtSizeTracker;
-import net.minecraft.registry.*;
-import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.world.ServerChunkManager;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.sound.SoundCategory;
-import net.minecraft.sound.SoundEvents;
-import net.minecraft.structure.StructurePlacementData;
-import net.minecraft.structure.StructureTemplate;
-import net.minecraft.text.Text;
-import net.minecraft.util.*;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
-import net.minecraft.world.biome.Biome;
-import net.minecraft.world.dimension.DimensionType;
-
-import net.minecraft.world.gen.chunk.*;
-import org.jetbrains.annotations.Nullable;
-
+import net.bennyboops.modid.data.MobEntryData;
 import net.bennyboops.modid.world.Fantasy;
+import net.bennyboops.modid.world.PortalChunkGenerator;
 import net.bennyboops.modid.world.RuntimeWorldConfig;
 import net.bennyboops.modid.world.RuntimeWorldHandle;
+import net.minecraft.ChatFormatting;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.Registry;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.NbtAccounter;
+import net.minecraft.nbt.NbtIo;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResultHolder;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.decoration.ItemFrame;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.TooltipFlag;
+import net.minecraft.world.item.component.CustomModelData;
+import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.item.enchantment.Enchantments;
+import net.minecraft.world.item.enchantment.ItemEnchantments;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.Mirror;
+import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.chunk.ChunkGenerator;
+import net.minecraft.world.level.dimension.DimensionType;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructurePlaceSettings;
+import net.minecraft.world.level.levelgen.structure.templatesystem.StructureTemplate;
+import net.minecraft.world.level.storage.LevelResource;
+import net.minecraft.world.phys.Vec3;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -49,67 +55,66 @@ import java.util.*;
 
 public class KeystoneItem extends Item {
 
-    private static final Identifier POCKET_DIMENSION_TYPE_ID =
-            Identifier.of("pocket-repose", "pocket_dimension_type");
+    private static final ResourceLocation POCKET_DIMENSION_TYPE_ID =
+            ResourceLocation.fromNamespaceAndPath("pocket-repose", "pocket_dimension_type");
 
-    public KeystoneItem(Settings settings) { super(settings); }
+    public KeystoneItem(Properties settings) { super(settings); }
 
     @Override
-    public TypedActionResult<ItemStack> use(World world,
-                                            PlayerEntity player,
-                                            Hand hand) {
-        ItemStack stack = player.getStackInHand(hand);
+    public InteractionResultHolder<ItemStack> use(Level world,
+                                                  Player player,
+                                                  InteractionHand hand) {
+        ItemStack stack = player.getItemInHand(hand);
 
-        String rawName      = Formatting.strip(stack.getName().getString());
-        String keystoneName = rawName.toLowerCase(Locale.ROOT);
-        if (!stack.contains(DataComponentTypes.CUSTOM_NAME)
+        String rawName = ChatFormatting.stripFormatting(stack.getHoverName().getString());
+        String keystoneName = rawName == null ? "" : rawName.toLowerCase(Locale.ROOT);
+        if (!stack.has(DataComponents.CUSTOM_NAME)
                 || keystoneName.equals("item.pocket-repose.keystone")) {
-            return TypedActionResult.pass(stack);
+            return InteractionResultHolder.pass(stack);
         }
 
-        if (world.isClient) {
-            return TypedActionResult.success(stack);
+        if (world.isClientSide) {
+            return InteractionResultHolder.success(stack);
         }
 
         String dimensionName = "pocket_dimension_" +
                 keystoneName.replaceAll("[^a-z0-9_]", "");
         createOrLoadPersistentDimension(world.getServer(), dimensionName);
 
-        if (!stack.hasEnchantments()) {
-            RegistryEntry<Enchantment> bindingCurse =
-                    world.getServer().getRegistryManager()
-                            .get(RegistryKeys.ENCHANTMENT)
-                            .entryOf(Enchantments.BINDING_CURSE);
+        if (!stack.isEnchanted()) {
+            Holder<Enchantment> bindingCurse =
+                    world.getServer().registryAccess()
+                            .registryOrThrow(Registries.ENCHANTMENT)
+                            .getHolderOrThrow(Enchantments.BINDING_CURSE);
 
-            stack.addEnchantment(bindingCurse, 1);
+            stack.enchant(bindingCurse, 1);
         }
 
         world.playSound(null, player.getX(), player.getY(), player.getZ(),
-                SoundEvents.BLOCK_AMETHYST_CLUSTER_FALL,
-                SoundCategory.PLAYERS, 2f, 2f);
+                SoundEvents.AMETHYST_CLUSTER_FALL,
+                SoundSource.PLAYERS, 2f, 2f);
 
-        return TypedActionResult.success(stack);
+        return InteractionResultHolder.success(stack);
     }
 
     private void createOrLoadPersistentDimension(MinecraftServer server,
                                                  String dimensionName) {
 
-        Identifier worldId = Identifier.of("pocket-repose", dimensionName);
-        Path dimPath = server.getSavePath(WorldSavePath.ROOT)
+        ResourceLocation worldId = ResourceLocation.fromNamespaceAndPath("pocket-repose", dimensionName);
+        Path dimPath = server.getWorldPath(LevelResource.ROOT)
                 .resolve("dimensions")
                 .resolve("pocket-repose")
                 .resolve(dimensionName);
         boolean exists = Files.exists(dimPath);
 
-        RegistryKey<DimensionType> typeKey =
-                RegistryKey.of(RegistryKeys.DIMENSION_TYPE,
-                        POCKET_DIMENSION_TYPE_ID);
+        ResourceKey<DimensionType> typeKey =
+                ResourceKey.create(Registries.DIMENSION_TYPE, POCKET_DIMENSION_TYPE_ID);
 
         Registry<Biome> biomeRegistry =
-                server.getRegistryManager().get(RegistryKeys.BIOME);
+                server.registryAccess().registryOrThrow(Registries.BIOME);
 
         ChunkGenerator generator = new PortalChunkGenerator(biomeRegistry);
-        long seed = server.getOverworld().getSeed();
+        long seed = server.overworld().getSeed();
 
         RuntimeWorldConfig cfg = new RuntimeWorldConfig()
                 .setDimensionType(typeKey)
@@ -132,63 +137,62 @@ public class KeystoneItem extends Item {
         }
     }
 
-    private void placeGrassCube(ServerWorld world) {
+    private void placeGrassCube(ServerLevel world) {
         BlockPos spawnPos = new BlockPos(17, 97, 9);
 
         for (int x = -1; x <= 1; x++) {
             for (int y = -1; y <= 1; y++) {
                 for (int z = -1; z <= 1; z++) {
-                    BlockPos grassPos = spawnPos.add(x, y - 2, z);
-                    world.setBlockState(grassPos, Blocks.GRASS_BLOCK.getDefaultState(), Block.NOTIFY_ALL);
+                    BlockPos grassPos = spawnPos.offset(x, y - 2, z);
+                    world.setBlock(grassPos, Blocks.GRASS_BLOCK.defaultBlockState(), Block.UPDATE_ALL);
                 }
             }
         }
 
         BlockPos portalPos = new BlockPos(17, 100, 9);
-        world.setBlockState(portalPos, net.bennyboops.modid.block.ModBlocks.PORTAL.getDefaultState(), Block.NOTIFY_ALL);
+        world.setBlock(portalPos, ModBlocks.PORTAL.get().defaultBlockState(), Block.UPDATE_ALL);
 
-        net.bennyboops.modid.data.MobEntryData mobData = net.bennyboops.modid.data.MobEntryData.get(world);
-        mobData.setEntry(new net.minecraft.util.math.Vec3d(17.5, 97.0, 9.5), 0f, 0f);
+        MobEntryData mobData = MobEntryData.get(world);
+        mobData.setEntry(new Vec3(17.5, 97.0, 9.5), 0f, 0f);
 
         PocketRepose.LOGGER.info("Placed cube, portal, and set mob entry at spawn location");
     }
 
     private void placeStructureImmediately(MinecraftServer server,
-                                           ServerWorld world,
+                                           ServerLevel world,
                                            String dimensionName) {
-        Identifier structureId = Identifier.of("pocket-repose", "pocket_island_01");
+        ResourceLocation structureId = ResourceLocation.fromNamespaceAndPath("pocket-repose", "pocket_island_01");
 
         PocketRepose.LOGGER.info("Looking for structure: {}", structureId);
 
-        var templateOpt = server.getStructureTemplateManager().getTemplate(structureId);
+        var templateOpt = server.getStructureManager().get(structureId);
 
         if (templateOpt.isEmpty()) {
             PocketRepose.LOGGER.error("Structure NOT found, attempting direct file load");
 
             try {
-                String resourcePath = "/data/pocket-repose/structures/pocket_island_01.nbt";
+                String resourcePath = "/data/pocket-repose/structure/pocket_island_01.nbt";
                 var inputStream = getClass().getResourceAsStream(resourcePath);
 
                 if (inputStream != null) {
                     PocketRepose.LOGGER.info("Found structure in mod resources");
 
-                    NbtCompound nbt = net.minecraft.nbt.NbtIo.readCompressed(inputStream,
-                            net.minecraft.nbt.NbtSizeTracker.ofUnlimitedBytes());
+                    CompoundTag nbt = NbtIo.readCompressed(inputStream, NbtAccounter.unlimitedHeap());
                     StructureTemplate template = new StructureTemplate();
 
-                    var blockLookup = server.getRegistryManager().getWrapperOrThrow(RegistryKeys.BLOCK);
-                    template.readNbt(blockLookup, nbt);
+                    var blockLookup = server.registryAccess().lookupOrThrow(Registries.BLOCK);
+                    template.load(blockLookup, nbt);
 
                     BlockPos origin = new BlockPos(0, 64, 0);
                     world.getChunk(origin);
 
-                    template.place(world, origin, origin,
-                            new StructurePlacementData()
-                                    .setMirror(BlockMirror.NONE)
-                                    .setRotation(BlockRotation.NONE)
+                    template.placeInWorld(world, origin, origin,
+                            new StructurePlaceSettings()
+                                    .setMirror(Mirror.NONE)
+                                    .setRotation(Rotation.NONE)
                                     .setIgnoreEntities(false),
                             world.getRandom(),
-                            Block.NOTIFY_ALL);
+                            Block.UPDATE_ALL);
 
                     PocketRepose.LOGGER.info("Structure loaded and placed from mod resources");
                     inputStream.close();
@@ -207,52 +211,53 @@ public class KeystoneItem extends Item {
         BlockPos origin = new BlockPos(0, 64, 0);
         world.getChunk(origin);
 
-        template.place(world, origin, origin,
-                new StructurePlacementData()
-                        .setMirror(BlockMirror.NONE)
-                        .setRotation(BlockRotation.NONE)
+        template.placeInWorld(world, origin, origin,
+                new StructurePlaceSettings()
+                        .setMirror(Mirror.NONE)
+                        .setRotation(Rotation.NONE)
                         .setIgnoreEntities(false),
                 world.getRandom(),
-                Block.NOTIFY_ALL);
+                Block.UPDATE_ALL);
 
         PocketRepose.LOGGER.info("Structure placed successfully");
     }
 
     public static boolean isValidKeystone(ItemStack stack) {
-        String cleanedName = Formatting.strip(stack.getName().getString())
-                .toLowerCase(Locale.ROOT);
+        String stripped = ChatFormatting.stripFormatting(stack.getHoverName().getString());
+        String cleanedName = stripped == null ? "" : stripped.toLowerCase(Locale.ROOT);
 
-        boolean hasCustomName = stack.contains(DataComponentTypes.CUSTOM_NAME)
+        boolean hasCustomName = stack.has(DataComponents.CUSTOM_NAME)
                 || (stack.getFrame() != null
                 && stack.getFrame().hasCustomName());
 
         boolean isDefault = cleanedName.equals("item.pocket-repose.keystone");
 
-        return hasCustomName && !isDefault && stack.hasEnchantments();
+        return hasCustomName && !isDefault && stack.isEnchanted();
     }
 
     @Override
-    public void appendTooltip(ItemStack stack, TooltipContext context,
-                              List<Text> tooltip, TooltipType type) {
-        boolean hasCustomName = stack.contains(DataComponentTypes.CUSTOM_NAME);
-        boolean isDefault     = Formatting.strip(stack.getName().getString())
-                .equalsIgnoreCase("item.pocket-repose.keystone");
+    public void appendHoverText(ItemStack stack, Item.TooltipContext context,
+                                List<Component> tooltip, TooltipFlag type) {
+        boolean hasCustomName = stack.has(DataComponents.CUSTOM_NAME);
+        String stripped = ChatFormatting.stripFormatting(stack.getHoverName().getString());
+        boolean isDefault = stripped != null
+                && stripped.equalsIgnoreCase("item.pocket-repose.keystone");
 
         if (!hasCustomName || isDefault) {
-            tooltip.add(Text.literal("Rename to bind")
-                    .formatted(Formatting.GRAY, Formatting.ITALIC));
+            tooltip.add(Component.literal("Rename to bind")
+                    .withStyle(ChatFormatting.GRAY, ChatFormatting.ITALIC));
         }
 
     }
 
     @Override
-    public void inventoryTick(ItemStack stack, World world,
+    public void inventoryTick(ItemStack stack, Level world,
                               Entity entity, int slot, boolean selected) {
-        ItemFrameEntity frame = stack.getFrame();
+        ItemFrame frame = stack.getFrame();
 
-        boolean hasCustomName = stack.contains(DataComponentTypes.CUSTOM_NAME);
+        boolean hasCustomName = stack.has(DataComponents.CUSTOM_NAME);
 
-        String displayName = stack.getName().getString();
+        String displayName = stack.getHoverName().getString();
         boolean isDefaultName = displayName.equalsIgnoreCase("item.pocket-repose.keystone")
                 || displayName.equalsIgnoreCase("Keystone");
 
@@ -263,36 +268,36 @@ public class KeystoneItem extends Item {
         }
 
         if (shouldShowBroken) {
-            CustomModelDataComponent cmd = stack.get(DataComponentTypes.CUSTOM_MODEL_DATA);
+            CustomModelData cmd = stack.get(DataComponents.CUSTOM_MODEL_DATA);
             if (cmd == null || cmd.value() != 1) {
-                stack.set(DataComponentTypes.CUSTOM_MODEL_DATA,
-                        new CustomModelDataComponent(1));
+                stack.set(DataComponents.CUSTOM_MODEL_DATA,
+                        new CustomModelData(1));
             }
         } else {
-            stack.remove(DataComponentTypes.CUSTOM_MODEL_DATA);
+            stack.remove(DataComponents.CUSTOM_MODEL_DATA);
         }
 
-        if (!world.isClient && stack.hasEnchantments()) {
-            int cost = stack.getOrDefault(DataComponentTypes.REPAIR_COST, 0);
+        if (!world.isClientSide && stack.isEnchanted()) {
+            int cost = stack.getOrDefault(DataComponents.REPAIR_COST, 0);
             if (cost < 32_767) {
-                stack.set(DataComponentTypes.REPAIR_COST, 32_767);
+                stack.set(DataComponents.REPAIR_COST, 32_767);
             }
 
-            ItemEnchantmentsComponent enchantments = stack.get(DataComponentTypes.ENCHANTMENTS);
+            ItemEnchantments enchantments = stack.get(DataComponents.ENCHANTMENTS);
             if (enchantments != null) {
-                stack.set(DataComponentTypes.ENCHANTMENTS, enchantments.withShowInTooltip(false));
+                stack.set(DataComponents.ENCHANTMENTS, enchantments.withTooltip(false));
             }
         }
     }
 
     @Override
-    public boolean hasGlint(ItemStack stack) {
-        return stack.hasEnchantments();
+    public boolean isFoil(ItemStack stack) {
+        return stack.isEnchanted();
     }
 
     private void registerDimension(MinecraftServer server,
                                    String dimensionName) {
-        Path dir = server.getSavePath(WorldSavePath.ROOT)
+        Path dir = server.getWorldPath(LevelResource.ROOT)
                 .resolve("data/pocket-repose/dimension_registry");
 
         try {

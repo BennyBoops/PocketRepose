@@ -1,9 +1,12 @@
 package net.bennyboops.modid;
 
-import net.fabricmc.api.ClientModInitializer;
+import net.neoforged.api.distmarker.Dist;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.common.Mod;
 
-public class PocketReposeClient implements ClientModInitializer {
-    @Override
-    public void onInitializeClient() {
+@Mod(value = PocketRepose.MODID, dist = Dist.CLIENT)
+public class PocketReposeClient {
+    public PocketReposeClient(IEventBus modEventBus, ModContainer modContainer) {
     }
 }

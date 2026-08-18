@@ -2,19 +2,16 @@ package net.bennyboops.modid.world;
 
 import com.google.common.base.Preconditions;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
-import net.bennyboops.modid.mixin.MinecraftServerAccess;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
-import net.minecraft.world.dimension.DimensionType;
-import net.minecraft.world.level.storage.LevelStorage;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.dimension.DimensionType;
+import net.minecraft.world.level.storage.LevelStorageSource;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.logging.log4j.LogManager;
@@ -32,38 +29,25 @@ import java.util.Set;
  *
  * @see Fantasy#get(MinecraftServer)
  * @see Fantasy#openTemporaryWorld(RuntimeWorldConfig)
- * @see Fantasy#getOrOpenPersistentWorld(Identifier, RuntimeWorldConfig)
+ * @see Fantasy#getOrOpenPersistentWorld(ResourceLocation, RuntimeWorldConfig)
  */
 public final class Fantasy {
     public static final Logger LOGGER = LogManager.getLogger(Fantasy.class);
     public static final String ID = "fantasy";
-    public static final RegistryKey<DimensionType> DEFAULT_DIM_TYPE = RegistryKey.of(RegistryKeys.DIMENSION_TYPE, Identifier.of(Fantasy.ID, "default"));
+    public static final ResourceKey<DimensionType> DEFAULT_DIM_TYPE =
+            ResourceKey.create(Registries.DIMENSION_TYPE, ResourceLocation.fromNamespaceAndPath(Fantasy.ID, "default"));
 
     private static Fantasy instance;
 
     private final MinecraftServer server;
-    private final MinecraftServerAccess serverAccess;
 
     private final RuntimeWorldManager worldManager;
 
-    private final Set<ServerWorld> deletionQueue = new ReferenceOpenHashSet<>();
-    private final Set<ServerWorld> unloadingQueue = new ReferenceOpenHashSet<>();
-
-    static {
-        ServerTickEvents.START_SERVER_TICK.register(server -> {
-            Fantasy fantasy = get(server);
-            fantasy.tick();
-        });
-
-        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
-            Fantasy fantasy = get(server);
-            fantasy.onServerStopping();
-        });
-    }
+    private final Set<ServerLevel> deletionQueue = new ReferenceOpenHashSet<>();
+    private final Set<ServerLevel> unloadingQueue = new ReferenceOpenHashSet<>();
 
     private Fantasy(MinecraftServer server) {
         this.server = server;
-        this.serverAccess = (MinecraftServerAccess) server;
 
         this.worldManager = new RuntimeWorldManager(server);
     }
@@ -75,7 +59,7 @@ public final class Fantasy {
      * @return the {@link Fantasy} instance to work with runtime dimensions
      */
     public static Fantasy get(MinecraftServer server) {
-        Preconditions.checkState(server.isOnThread(), "cannot create worlds from off-thread!");
+        Preconditions.checkState(server.isSameThread(), "cannot create worlds from off-thread!");
 
         if (instance == null || instance.server != server) {
             instance = new Fantasy(server);
@@ -84,13 +68,27 @@ public final class Fantasy {
         return instance;
     }
 
+    /**
+     * Ticks the pending deletion/unloading queues. Hooked up from the mod's server tick handler.
+     */
+    public static void onServerTick(MinecraftServer server) {
+        get(server).tick();
+    }
+
+    /**
+     * Deletes every temporary world before the server shuts down.
+     */
+    public static void onServerStopping(MinecraftServer server) {
+        get(server).stopping();
+    }
+
     private void tick() {
-        Set<ServerWorld> deletionQueue = this.deletionQueue;
+        Set<ServerLevel> deletionQueue = this.deletionQueue;
         if (!deletionQueue.isEmpty()) {
             deletionQueue.removeIf(this::tickDeleteWorld);
         }
 
-        Set<ServerWorld> unloadingQueue = this.unloadingQueue;
+        Set<ServerLevel> unloadingQueue = this.unloadingQueue;
         if (!unloadingQueue.isEmpty()) {
             unloadingQueue.removeIf(this::tickUnloadWorld);
         }
@@ -99,31 +97,23 @@ public final class Fantasy {
     /**
      * Creates a new temporary world with the given {@link RuntimeWorldConfig} that will not be saved and will be
      * deleted when the server exits.
-     * <p>
-     * The created world is returned asynchronously through a {@link RuntimeWorldHandle}.
-     * This handle can be used to acquire the {@link ServerWorld} object through {@link RuntimeWorldHandle#asWorld()},
-     * as well as to delete the world through {@link RuntimeWorldHandle#delete()}.
      *
      * @param config the config with which to construct this temporary world
-     * @return a future providing the created world
+     * @return a handle providing the created world
      */
     public RuntimeWorldHandle openTemporaryWorld(RuntimeWorldConfig config) {
         return this.openTemporaryWorld(generateTemporaryWorldKey(), config);
     }
 
     /**
-     * Creates a new temporary world with the given identifier and {@link RuntimeWorldConfig} that will not be saved and will be
-     * deleted when the server exits.
-     * <p>
-     * The created world is returned asynchronously through a {@link RuntimeWorldHandle}.
-     * This handle can be used to acquire the {@link ServerWorld} object through {@link RuntimeWorldHandle#asWorld()},
-     * as well as to delete the world through {@link RuntimeWorldHandle#delete()}.
+     * Creates a new temporary world with the given identifier and {@link RuntimeWorldConfig} that will not be saved and
+     * will be deleted when the server exits.
      *
      * @param key the unique identifier for this dimension
      * @param config the config with which to construct this temporary world
-     * @return a future providing the created world
+     * @return a handle providing the created world
      */
-    public RuntimeWorldHandle openTemporaryWorld(Identifier key, RuntimeWorldConfig config) {
+    public RuntimeWorldHandle openTemporaryWorld(ResourceLocation key, RuntimeWorldConfig config) {
         RuntimeWorld world = this.addTemporaryWorld(key, config);
         return new RuntimeWorldHandle(this, world);
     }
@@ -132,23 +122,17 @@ public final class Fantasy {
      * Gets or creates a new persistent world with the given identifier and {@link RuntimeWorldConfig}. These worlds
      * will be saved to disk and can be restored after a server restart.
      * <p>
-     * If a world with this identifier exists already, it will be returned and no new world will be constructed.
-     * <p>
      * <b>Note!</b> These persistent worlds will not be automatically restored! This function
      * must be called after a server restart with the relevant identifier and configuration such that it can be loaded.
-     * <p>
-     * The created world is returned asynchronously through a {@link RuntimeWorldHandle}.
-     * This handle can be used to acquire the {@link ServerWorld} object through {@link RuntimeWorldHandle#asWorld()},
-     * as well as to delete the world through {@link RuntimeWorldHandle#delete()}.
      *
      * @param key the unique identifier for this dimension
      * @param config the config with which to construct this persistent world
-     * @return a future providing the created world
+     * @return a handle providing the created world
      */
-    public RuntimeWorldHandle getOrOpenPersistentWorld(Identifier key, RuntimeWorldConfig config) {
-        RegistryKey<World> worldKey = RegistryKey.of(RegistryKeys.WORLD, key);
+    public RuntimeWorldHandle getOrOpenPersistentWorld(ResourceLocation key, RuntimeWorldConfig config) {
+        ResourceKey<Level> worldKey = ResourceKey.create(Registries.DIMENSION, key);
 
-        ServerWorld world = this.server.getWorld(worldKey);
+        ServerLevel world = this.server.getLevel(worldKey);
         if (world == null) {
             world = this.addPersistentWorld(key, config);
         } else {
@@ -158,36 +142,32 @@ public final class Fantasy {
         return new RuntimeWorldHandle(this, world);
     }
 
-    private RuntimeWorld addPersistentWorld(Identifier key, RuntimeWorldConfig config) {
-        RegistryKey<World> worldKey = RegistryKey.of(RegistryKeys.WORLD, key);
+    private RuntimeWorld addPersistentWorld(ResourceLocation key, RuntimeWorldConfig config) {
+        ResourceKey<Level> worldKey = ResourceKey.create(Registries.DIMENSION, key);
         return this.worldManager.add(worldKey, config, RuntimeWorld.Style.PERSISTENT);
     }
 
-    private RuntimeWorld addTemporaryWorld(Identifier key, RuntimeWorldConfig config) {
-        RegistryKey<World> worldKey = RegistryKey.of(RegistryKeys.WORLD, key);
+    private RuntimeWorld addTemporaryWorld(ResourceLocation key, RuntimeWorldConfig config) {
+        ResourceKey<Level> worldKey = ResourceKey.create(Registries.DIMENSION, key);
 
         try {
-            LevelStorage.Session session = this.serverAccess.getSession();
-            FileUtils.forceDeleteOnExit(session.getWorldDirectory(worldKey).toFile());
+            LevelStorageSource.LevelStorageAccess session = this.server.storageSource;
+            FileUtils.forceDeleteOnExit(session.getDimensionPath(worldKey).toFile());
         } catch (IOException ignored) {
         }
 
         return this.worldManager.add(worldKey, config, RuntimeWorld.Style.TEMPORARY);
     }
 
-    void enqueueWorldDeletion(ServerWorld world) {
-        this.server.submit(() -> {
-            this.deletionQueue.add(world);
-        });
+    void enqueueWorldDeletion(ServerLevel world) {
+        this.server.execute(() -> this.deletionQueue.add(world));
     }
 
-    void enqueueWorldUnloading(ServerWorld world) {
-        this.server.submit(() -> {
-            this.unloadingQueue.add(world);
-        });
+    void enqueueWorldUnloading(ServerLevel world) {
+        this.server.execute(() -> this.unloadingQueue.add(world));
     }
 
-    public boolean tickDeleteWorld(ServerWorld world) {
+    public boolean tickDeleteWorld(ServerLevel world) {
         if (this.isWorldUnloaded(world)) {
             this.worldManager.delete(world);
             return true;
@@ -197,7 +177,7 @@ public final class Fantasy {
         }
     }
 
-    public boolean tickUnloadWorld(ServerWorld world) {
+    public boolean tickUnloadWorld(ServerLevel world) {
         if (this.isWorldUnloaded(world)) {
             this.worldManager.unload(world);
             return true;
@@ -207,26 +187,26 @@ public final class Fantasy {
         }
     }
 
-    private void kickPlayers(ServerWorld world) {
-        if (world.getPlayers().isEmpty()) {
+    private void kickPlayers(ServerLevel world) {
+        if (world.players().isEmpty()) {
             return;
         }
 
-        ServerWorld overworld = this.server.getOverworld();
-        BlockPos spawnPos = overworld.getSpawnPos();
-        float spawnAngle = overworld.getSpawnAngle();
+        ServerLevel overworld = this.server.overworld();
+        BlockPos spawnPos = overworld.getSharedSpawnPos();
+        float spawnAngle = overworld.getSharedSpawnAngle();
 
-        List<ServerPlayerEntity> players = new ArrayList<>(world.getPlayers());
-        for (ServerPlayerEntity player : players) {
-            player.teleport(overworld, spawnPos.getX() + 0.5, spawnPos.getY(), spawnPos.getZ() + 0.5, spawnAngle, 0.0F);
+        List<ServerPlayer> players = new ArrayList<>(world.players());
+        for (ServerPlayer player : players) {
+            player.teleportTo(overworld, spawnPos.getX() + 0.5, spawnPos.getY(), spawnPos.getZ() + 0.5, spawnAngle, 0.0F);
         }
     }
 
-    private boolean isWorldUnloaded(ServerWorld world) {
-        return world.getPlayers().isEmpty() && world.getChunkManager().getLoadedChunkCount() <= 0;
+    private boolean isWorldUnloaded(ServerLevel world) {
+        return world.players().isEmpty() && world.getChunkSource().getLoadedChunksCount() <= 0;
     }
 
-    private void onServerStopping() {
+    private void stopping() {
         List<RuntimeWorld> temporaryWorlds = this.collectTemporaryWorlds();
         for (RuntimeWorld temporary : temporaryWorlds) {
             this.kickPlayers(temporary);
@@ -236,9 +216,8 @@ public final class Fantasy {
 
     private List<RuntimeWorld> collectTemporaryWorlds() {
         List<RuntimeWorld> temporaryWorlds = new ArrayList<>();
-        for (ServerWorld world : this.server.getWorlds()) {
-            if (world instanceof RuntimeWorld) {
-                RuntimeWorld runtimeWorld = (RuntimeWorld) world;
+        for (ServerLevel world : this.server.getAllLevels()) {
+            if (world instanceof RuntimeWorld runtimeWorld) {
                 if (runtimeWorld.style == RuntimeWorld.Style.TEMPORARY) {
                     temporaryWorlds.add(runtimeWorld);
                 }
@@ -247,8 +226,8 @@ public final class Fantasy {
         return temporaryWorlds;
     }
 
-    private static Identifier generateTemporaryWorldKey() {
+    private static ResourceLocation generateTemporaryWorldKey() {
         String key = RandomStringUtils.random(16, "abcdefghijklmnopqrstuvwxyz0123456789");
-        return Identifier.of(Fantasy.ID, key);
+        return ResourceLocation.fromNamespaceAndPath(Fantasy.ID, key);
     }
 }

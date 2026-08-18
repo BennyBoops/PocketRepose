@@ -1,46 +1,38 @@
 package net.bennyboops.modid.criterion;
 
-import com.google.gson.JsonObject;
 import com.mojang.serialization.Codec;
-import net.minecraft.advancement.criterion.AbstractCriterion;
-import net.minecraft.predicate.entity.LootContextPredicate;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.Identifier;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
+import net.minecraft.advancements.critereon.ContextAwarePredicate;
+import net.minecraft.advancements.critereon.EntityPredicate;
+import net.minecraft.advancements.critereon.SimpleCriterionTrigger;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
 
 import java.util.Optional;
 
 public class EnterPocketDimensionCriterion
-        extends AbstractCriterion<EnterPocketDimensionCriterion.Conditions> {
+        extends SimpleCriterionTrigger<EnterPocketDimensionCriterion.Conditions> {
 
-    public static final Identifier ID = Identifier.of("pocket-repose", "enter_pocket_dimension");
+    public static final ResourceLocation ID =
+            ResourceLocation.fromNamespaceAndPath("pocket-repose", "enter_pocket_dimension");
 
+    public static final Codec<Conditions> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+            EntityPredicate.ADVANCEMENT_CODEC.optionalFieldOf("player").forGetter(Conditions::player)
+    ).apply(instance, Conditions::new));
 
-    public Identifier getId() {
+    public ResourceLocation getId() {
         return ID;
     }
 
-    protected Conditions conditionsFromJson(JsonObject json, LootContextPredicate playerPredicate) {
-        return new Conditions(playerPredicate);
-    }
-
-    public void trigger(ServerPlayerEntity player) {
+    public void trigger(ServerPlayer player) {
         this.trigger(player, c -> true);
     }
 
     @Override
-    public Codec<Conditions> getConditionsCodec() {
-        return null;
+    public Codec<Conditions> codec() {
+        return CODEC;
     }
 
-    public static class Conditions implements AbstractCriterion.Conditions {
-        public Conditions(LootContextPredicate playerPredicate) {
-            super();
-        }
-
-        @Override
-        public Optional<LootContextPredicate> player() {
-            return Optional.empty();
-        }
-
+    public record Conditions(Optional<ContextAwarePredicate> player) implements SimpleCriterionTrigger.SimpleInstance {
     }
 }

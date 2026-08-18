@@ -1,87 +1,80 @@
 plugins {
-	id 'fabric-loom' version '1.8-SNAPSHOT'
+	id 'java-library'
 	id 'maven-publish'
+	id 'net.neoforged.moddev' version '2.0.144'
 }
 
-version = project.mod_version
-group   = project.maven_group
+version =minecraft_version + "-" + mod_version + "-" + tag_lanzador
+group = mod_group_id
 
 base {
-	archivesName = project.archives_base_name
+    archivesName = mod_named
 }
-
-repositories {
-	maven { url = 'https://maven.nucleoid.xyz/' }
-	maven { url = 'https://repo.spongepowered.org/maven' }
-}
-
-fabricApi {
-	configureDataGeneration()
-}
-
-
-sourceSets {
-	testmod {
-		compileClasspath += main.compileClasspath
-		runtimeClasspath += main.runtimeClasspath
-	}
-}
-
-loom {
-	runs {
-		testmodClient {
-			client()
-			name = "Testmod Client"
-			source sourceSets.testmod
-		}
-		testmodServer {
-			server()
-			name = "Testmod Server"
-			source sourceSets.testmod
-		}
-	}
-
-	accessWidenerPath = file("src/main/resources/fantasy.accesswidener")
-}
-
-
-configurations {
-
-}
-
-
-dependencies {
-
-	minecraft    "com.mojang:minecraft:${project.minecraft_version}"
-	mappings      "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-
-	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-
-	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
-
-	//modImplementation include('xyz.nucleoid:fantasy:0.4.11+1.20-rc1')
-
-	//modLocalRuntime "eu.pb4:polymer-reg-sync-manipulator:0.5.5+1.20.1"
-
-	testmodImplementation sourceSets.main.output
-}
-
-processResources {
-	inputs.property "version", project.version
-
-	filesMatching("fabric.mod.json") {
-		expand "version": project.version
-	}
-}
-
-tasks.withType(JavaCompile).configureEach {
-	it.options.release = 17
-}
-
 java {
+	toolchain.languageVersion = JavaLanguageVersion.of(21)
 	withSourcesJar()
-	sourceCompatibility = JavaVersion.VERSION_17
-	targetCompatibility = JavaVersion.VERSION_17
+}
+
+
+neoForge {
+	version = project.neoforge_version
+
+	accessTransformers.from('src/main/resources/META-INF/accesstransformer.cfg')
+
+	runs {
+		client {
+			client()
+		}
+		server {
+			server()
+		}
+		data {
+			clientData()
+		}
+		configureEach {
+			logLevel = org.slf4j.event.Level.INFO
+		}
+	}
+
+	mods {
+		"${project.mod_id}" {
+			sourceSet sourceSets.main
+		}
+	}
+}
+
+	repositories {
+		mavenCentral()
+	maven { url = 'https://maven.neoforged.net/releases' }
+	 maven {
+    name = "Jared's maven"
+    url = "https://maven.blamejared.com/"
+			 }
+}
+dependencies {
+	    compileOnly("mezz.jei:jei-${minecraft_version}-neoforge-api:${jei_version}")
+    runtimeOnly("mezz.jei:jei-${minecraft_version}-neoforge:${jei_version}")
+}
+
+tasks.withType(ProcessResources).configureEach {
+	var replaceProperties = [
+			minecraft_version      : project.minecraft_version,
+			minecraft_version_range: project.minecraft_version_range,
+			neoforge_version       : project.neoforge_version,
+			neoforge_version_range : project.neoforge_version_range,
+			loader_version_range   : project.loader_version_range,
+			mod_id                 : project.mod_id,
+			mod_name               : project.mod_name,
+			mod_license            : project.mod_license,
+			mod_version            : project.mod_version,
+			mod_authors            : project.mod_authors,
+			mod_description        : project.mod_description
+	]
+	inputs.properties replaceProperties
+
+	filesMatching(['META-INF/neoforge.mods.toml']) {
+		expand replaceProperties
+	}
 }
 
 jar {
@@ -90,7 +83,6 @@ jar {
 	}
 }
 
-// Publishing configuration remains unchanged
 publishing {
 	publications {
 		create("mavenJava", MavenPublication) {
@@ -99,7 +91,4 @@ publishing {
 		}
 	}
 
-	repositories {
-		// add publishing repos here
-	}
 }

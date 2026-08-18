@@ -2,66 +2,66 @@ package net.bennyboops.modid.block;
 
 import net.bennyboops.modid.block.entity.SuitcaseBlockEntity;
 import net.bennyboops.modid.data.SuitcaseLocationTracker;
-import net.minecraft.block.Block;
-import net.minecraft.block.BlockState;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.ContainerComponent;
-import net.minecraft.component.type.LoreComponent;
-import net.minecraft.component.type.NbtComponent;
-import net.minecraft.entity.Entity;
-import net.minecraft.entity.ItemEntity;
-import net.minecraft.inventory.Inventory;
-import net.minecraft.item.BlockItem;
-import net.minecraft.item.ItemStack;
-import net.minecraft.loot.context.LootContextParameterSet;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtList;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
+import net.minecraft.ChatFormatting;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.sound.SoundCategory;
-import net.minecraft.sound.SoundEvents;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
-import net.minecraft.world.chunk.WorldChunk;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.Container;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.item.component.ItemContainerContents;
+import net.minecraft.world.item.component.ItemLore;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.storage.loot.LootParams;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 
 import java.util.*;
 
 public class PocketPortalBlock extends Block {
 
-    public PocketPortalBlock(Settings settings) {
+    public PocketPortalBlock(Properties settings) {
         super(settings);
     }
 
     @Override
-    public List<ItemStack> getDroppedStacks(BlockState state, LootContextParameterSet.Builder builder) {
+    public List<ItemStack> getDrops(BlockState state, LootParams.Builder builder) {
         return Collections.singletonList(new ItemStack(this));
     }
 
     private static final int MAX_NESTED_CONTAINER_DEPTH = 4;
 
     @Override
-    public void onEntityCollision(BlockState state, World world, BlockPos pos, Entity entity) {
-        if (world.isClient) return;
-        if (!(entity instanceof ServerPlayerEntity player)) return;
+    protected void entityInside(BlockState state, Level world, BlockPos pos, Entity entity) {
+        if (world.isClientSide) return;
+        if (!(entity instanceof ServerPlayer player)) return;
 
-        String currentPath = world.getRegistryKey().getValue().getPath();
+        String currentPath = world.dimension().location().getPath();
         if (!currentPath.startsWith("pocket_dimension_")) return;
 
         String keystoneName = currentPath.substring("pocket_dimension_".length());
-        String playerUuid = player.getUuidAsString();
+        String playerUuid = player.getStringUUID();
 
         preparePlayerForTeleport(player);
-        world.playSound(null, pos, SoundEvents.ITEM_BUNDLE_DROP_CONTENTS, SoundCategory.PLAYERS, 2.0f, 1.0f);
+        world.playSound(null, pos, SoundEvents.BUNDLE_DROP_CONTENTS, SoundSource.PLAYERS, 2.0f, 1.0f);
 
         MinecraftServer server = world.getServer();
         SuitcaseLocationTracker tracker = SuitcaseLocationTracker.get(server);
@@ -74,9 +74,9 @@ public class PocketPortalBlock extends Block {
         if (!teleported && tracker != null && expectedSuitcaseId != null) {
             SuitcaseLocationTracker.SuitcaseInstanceLocation sLoc = tracker.getSuitcaseLocation(expectedSuitcaseId);
             if (sLoc != null && sLoc.type != SuitcaseLocationTracker.LocationType.DESTROYED) {
-                ServerWorld targetWorld = worldFromId(server, sLoc.dimensionId);
+                ServerLevel targetWorld = worldFromId(server, sLoc.dimensionId);
                 if (targetWorld != null) {
-                    teleportToPosition(player, targetWorld, sLoc.x, sLoc.y, sLoc.z, player.getYaw(), player.getPitch());
+                    teleportToPosition(player, targetWorld, sLoc.x, sLoc.y, sLoc.z, player.getYRot(), player.getXRot());
                     teleported = true;
                 }
             }
@@ -87,7 +87,7 @@ public class PocketPortalBlock extends Block {
             SuitcaseLocationTracker.LocationData loc = tracker.getLocation(keystoneName, playerUuid);
             if (loc != null && loc.type != SuitcaseLocationTracker.LocationType.DESTROYED) {
                 if (expectedSuitcaseId == null || (loc.suitcaseId != null && expectedSuitcaseId.equals(loc.suitcaseId))) {
-                    ServerWorld targetWorld = worldFromId(server, loc.dimensionId);
+                    ServerLevel targetWorld = worldFromId(server, loc.dimensionId);
                     if (targetWorld != null) {
                         teleportToPosition(player, targetWorld, loc.x, loc.y, loc.z, loc.yaw, loc.pitch);
                         teleported = true;
@@ -99,16 +99,16 @@ public class PocketPortalBlock extends Block {
         //Method 2: Inventory)
         if (!teleported && expectedSuitcaseId != null) {
             outer:
-            for (ServerPlayerEntity online : server.getPlayerManager().getPlayerList()) {
-                for (int i = 0; i < online.getInventory().size(); i++) {
-                    ItemStack stack = online.getInventory().getStack(i);
+            for (ServerPlayer online : server.getPlayerList().getPlayers()) {
+                for (int i = 0; i < online.getInventory().getContainerSize(); i++) {
+                    ItemStack stack = online.getInventory().getItem(i);
 
                     if (containsSuitcaseWithKeystoneAndId(stack, keystoneName, expectedSuitcaseId, MAX_NESTED_CONTAINER_DEPTH)) {
 
-                        ServerWorld targetWorld = online.getServerWorld();
+                        ServerLevel targetWorld = online.serverLevel();
                         teleportToPosition(player, targetWorld,
                                 online.getX(), online.getY() + 1.0, online.getZ(),
-                                player.getYaw(), player.getPitch());
+                                player.getYRot(), player.getXRot());
 
                         teleported = true;
                         break outer;
@@ -120,22 +120,22 @@ public class PocketPortalBlock extends Block {
 
         //Method 3: Dropped items near players
         if (!teleported && expectedSuitcaseId != null) {
-            for (ServerWorld w : server.getWorlds()) {
-                for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
-                    if (p.getServerWorld() != w) continue;
+            for (ServerLevel w : server.getAllLevels()) {
+                for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+                    if (p.serverLevel() != w) continue;
 
-                    Box box = p.getBoundingBox().expand(256);
-                    List<ItemEntity> items = w.getEntitiesByClass(ItemEntity.class, box,
-                            item -> isSuitcaseWithKeystoneAndId(item.getStack(), keystoneName, expectedSuitcaseId));
+                    AABB box = p.getBoundingBox().inflate(256);
+                    List<ItemEntity> items = w.getEntitiesOfClass(ItemEntity.class, box,
+                            item -> isSuitcaseWithKeystoneAndId(item.getItem(), keystoneName, expectedSuitcaseId));
 
                     if (!items.isEmpty()) {
                         ItemEntity suitcaseItem = items.get(0);
-                        cleanUpSuitcaseItemNbt(suitcaseItem.getStack(), player, keystoneName);
-                        suitcaseItem.setStack(suitcaseItem.getStack());
+                        cleanUpSuitcaseItemNbt(suitcaseItem.getItem(), player, keystoneName);
+                        suitcaseItem.setItem(suitcaseItem.getItem());
 
                         teleportToPosition(player, w,
                                 suitcaseItem.getX(), suitcaseItem.getY() + 1.0, suitcaseItem.getZ(),
-                                player.getYaw(), player.getPitch());
+                                player.getYRot(), player.getXRot());
                         teleported = true;
                         break;
                     }
@@ -153,9 +153,9 @@ public class PocketPortalBlock extends Block {
         if (!teleported && tracker != null) {
             SuitcaseLocationTracker.LocationData entry = tracker.getEntryLocation(keystoneName, playerUuid);
             if (entry != null) {
-                ServerWorld targetWorld = worldFromId(server, entry.dimensionId);
+                ServerLevel targetWorld = worldFromId(server, entry.dimensionId);
                 if (targetWorld != null) {
-                    player.sendMessage(Text.literal("§6Returning to entry point"), true);
+                    player.displayClientMessage(Component.literal("§6Returning to entry point"), true);
                     teleportToPosition(player, targetWorld,
                             entry.x, entry.y, entry.z,
                             entry.yaw, entry.pitch);
@@ -165,33 +165,33 @@ public class PocketPortalBlock extends Block {
         }
 
         if (!teleported) {
-            player.sendMessage(Text.literal("§cNo exit point found - Returning to spawn"), true);
+            player.displayClientMessage(Component.literal("§cNo exit point found - Returning to spawn"), true);
 
             MinecraftServer srv = player.getServer();
             if (srv != null) {
                 boolean moved = false;
 
-                BlockPos respawnPos = player.getSpawnPointPosition();
-                RegistryKey<World> respawnDim = player.getSpawnPointDimension();
+                BlockPos respawnPos = player.getRespawnPosition();
+                ResourceKey<Level> respawnDim = player.getRespawnDimension();
 
                 if (respawnPos != null) {
-                    ServerWorld respawnWorld = srv.getWorld(respawnDim);
+                    ServerLevel respawnWorld = srv.getLevel(respawnDim);
                     if (respawnWorld != null && isValidRespawnBlock(respawnWorld, respawnPos)) {
-                        Vec3d safe = findSafeSpotNear(respawnWorld, respawnPos);
+                        Vec3 safe = findSafeSpotNear(respawnWorld, respawnPos);
                         if (safe != null) {
-                            teleportToPosition(player, respawnWorld, safe.x, safe.y, safe.z, player.getYaw(), player.getPitch());
+                            teleportToPosition(player, respawnWorld, safe.x, safe.y, safe.z, player.getYRot(), player.getXRot());
                             moved = true;
                         }
                     }
                 }
 
                 if (!moved) {
-                    ServerWorld overworld = srv.getOverworld();
-                    BlockPos worldSpawn = overworld.getSpawnPos();
-                    Vec3d safe = findSafeSpotNear(overworld, worldSpawn);
-                    if (safe == null) safe = new Vec3d(worldSpawn.getX() + 0.5, worldSpawn.getY() + 0.1, worldSpawn.getZ() + 0.5);
+                    ServerLevel overworld = srv.overworld();
+                    BlockPos worldSpawn = overworld.getSharedSpawnPos();
+                    Vec3 safe = findSafeSpotNear(overworld, worldSpawn);
+                    if (safe == null) safe = new Vec3(worldSpawn.getX() + 0.5, worldSpawn.getY() + 0.1, worldSpawn.getZ() + 0.5);
 
-                    teleportToPosition(player, overworld, safe.x, safe.y, safe.z, overworld.getSpawnAngle(), player.getPitch());
+                    teleportToPosition(player, overworld, safe.x, safe.y, safe.z, overworld.getSharedSpawnAngle(), player.getXRot());
                 }
             }
         }
@@ -199,59 +199,60 @@ public class PocketPortalBlock extends Block {
         SuitcaseBlockEntity.removeSuitcaseEntry(keystoneName, playerUuid, server);
     }
 
-    private static boolean isValidRespawnBlock(ServerWorld world, BlockPos pos) {
+    private static boolean isValidRespawnBlock(ServerLevel world, BlockPos pos) {
         var state = world.getBlockState(pos);
-        return state.getBlock() instanceof net.minecraft.block.BedBlock
-                || state.isOf(net.minecraft.block.Blocks.RESPAWN_ANCHOR);
+        return state.getBlock() instanceof net.minecraft.world.level.block.BedBlock
+                || state.is(net.minecraft.world.level.block.Blocks.RESPAWN_ANCHOR);
     }
-    private static Vec3d findSafeSpotNear(ServerWorld world, BlockPos origin) {
+
+    private static Vec3 findSafeSpotNear(ServerLevel world, BlockPos origin) {
         for (int dy = 0; dy <= 2; dy++) {
             for (int dx = -2; dx <= 2; dx++) {
                 for (int dz = -2; dz <= 2; dz++) {
-                    BlockPos p = origin.add(dx, dy, dz);
-                    BlockPos below = p.down();
+                    BlockPos p = origin.offset(dx, dy, dz);
+                    BlockPos below = p.below();
 
-                    if (!world.getBlockState(below).isSolidBlock(world, below)) continue;
+                    if (!world.getBlockState(below).isRedstoneConductor(world, below)) continue;
 
                     if (!world.getBlockState(p).getCollisionShape(world, p).isEmpty()) continue;
-                    BlockPos pUp = p.up();
+                    BlockPos pUp = p.above();
                     if (!world.getBlockState(pUp).getCollisionShape(world, pUp).isEmpty()) continue;
 
-                    return new Vec3d(p.getX() + 0.5, p.getY() + 0.1, p.getZ() + 0.5);
+                    return new Vec3(p.getX() + 0.5, p.getY() + 0.1, p.getZ() + 0.5);
                 }
             }
         }
         return null;
     }
 
-    private boolean searchContainersForSuitcase(MinecraftServer server, ServerPlayerEntity exitingPlayer,
+    private boolean searchContainersForSuitcase(MinecraftServer server, ServerPlayer exitingPlayer,
                                                 String keystoneName, UUID expectedSuitcaseId) {
-        for (ServerPlayerEntity onlinePlayer : server.getPlayerManager().getPlayerList()) {
-            ServerWorld playerWorld = onlinePlayer.getServerWorld();
+        for (ServerPlayer onlinePlayer : server.getPlayerList().getPlayers()) {
+            ServerLevel playerWorld = onlinePlayer.serverLevel();
 
-            ChunkPos playerChunk = onlinePlayer.getChunkPos();
+            ChunkPos playerChunk = onlinePlayer.chunkPosition();
             int radius = 8;
 
             for (int x = playerChunk.x - radius; x <= playerChunk.x + radius; x++) {
                 for (int z = playerChunk.z - radius; z <= playerChunk.z + radius; z++) {
-                    if (!playerWorld.isChunkLoaded(x, z)) continue;
+                    if (!playerWorld.hasChunk(x, z)) continue;
 
-                    WorldChunk chunk = playerWorld.getChunk(x, z);
+                    LevelChunk chunk = playerWorld.getChunk(x, z);
                     for (var blockEntity : chunk.getBlockEntities().values()) {
-                        if (!(blockEntity instanceof Inventory inventory)) continue;
+                        if (!(blockEntity instanceof Container inventory)) continue;
 
-                        for (int i = 0; i < inventory.size(); i++) {
-                            ItemStack stack = inventory.getStack(i);
+                        for (int i = 0; i < inventory.getContainerSize(); i++) {
+                            ItemStack stack = inventory.getItem(i);
                             if (isSuitcaseWithKeystoneAndId(stack, keystoneName, expectedSuitcaseId)) {
                                 cleanUpSuitcaseItemNbt(stack, exitingPlayer, keystoneName);
-                                inventory.setStack(i, stack);
+                                inventory.setItem(i, stack);
 
-                                BlockPos containerPos = ((net.minecraft.block.entity.BlockEntity) blockEntity).getPos();
+                                BlockPos containerPos = blockEntity.getBlockPos();
                                 teleportToPosition(exitingPlayer, playerWorld,
                                         containerPos.getX() + 0.5,
                                         containerPos.getY() + 1.0,
                                         containerPos.getZ() + 0.5,
-                                        exitingPlayer.getYaw(), exitingPlayer.getPitch());
+                                        exitingPlayer.getYRot(), exitingPlayer.getXRot());
                                 return true;
                             }
                         }
@@ -262,29 +263,29 @@ public class PocketPortalBlock extends Block {
         return false;
     }
 
-    private void preparePlayerForTeleport(ServerPlayerEntity player) {
+    private void preparePlayerForTeleport(ServerPlayer player) {
         player.stopRiding();
-        player.velocityModified = true;
-        player.setVelocity(Vec3d.ZERO);
+        player.hasImpulse = true;
+        player.setDeltaMovement(Vec3.ZERO);
         player.fallDistance = 0f;
     }
 
     //Exact teleport
-    private void teleportToPosition(ServerPlayerEntity player, ServerWorld targetWorld,
+    private void teleportToPosition(ServerPlayer player, ServerLevel targetWorld,
                                     double x, double y, double z, float yaw, float pitch) {
-        player.requestTeleport(x, y, z);
-        targetWorld.getServer().execute(() -> player.teleport(targetWorld, x, y, z, yaw, pitch));
+        player.teleportTo(x, y, z);
+        targetWorld.getServer().execute(() -> player.teleportTo(targetWorld, x, y, z, yaw, pitch));
     }
 
-    private ServerWorld worldFromId(MinecraftServer server, String dimStr) {
-        if (dimStr == null || dimStr.isEmpty()) return server.getWorld(World.OVERWORLD);
+    private ServerLevel worldFromId(MinecraftServer server, String dimStr) {
+        if (dimStr == null || dimStr.isEmpty()) return server.getLevel(Level.OVERWORLD);
 
-        Identifier id = Identifier.tryParse(dimStr);
-        if (id == null) return server.getWorld(World.OVERWORLD);
+        ResourceLocation id = ResourceLocation.tryParse(dimStr);
+        if (id == null) return server.getLevel(Level.OVERWORLD);
 
-        RegistryKey<World> key = RegistryKey.of(RegistryKeys.WORLD, id);
-        ServerWorld w = server.getWorld(key);
-        return (w != null) ? w : server.getWorld(World.OVERWORLD);
+        ResourceKey<Level> key = ResourceKey.create(Registries.DIMENSION, id);
+        ServerLevel w = server.getLevel(key);
+        return (w != null) ? w : server.getLevel(Level.OVERWORLD);
     }
 
     private boolean isSuitcaseWithKeystoneAndId(ItemStack stack, String keystoneName, UUID expectedSuitcaseId) {
@@ -293,39 +294,38 @@ public class PocketPortalBlock extends Block {
             return false;
         }
 
-        NbtComponent beTag = stack.get(DataComponentTypes.BLOCK_ENTITY_DATA);
+        CustomData beTag = stack.get(DataComponents.BLOCK_ENTITY_DATA);
         if (beTag == null) return false;
 
-        NbtCompound nbt = beTag.copyNbt();
+        CompoundTag nbt = beTag.copyTag();
         if (!keystoneName.equals(nbt.getString("BoundKeystone"))) return false;
 
-        if (!nbt.containsUuid(SuitcaseBlockEntity.NBT_SUITCASE_ID)) return false;
-        UUID id = nbt.getUuid(SuitcaseBlockEntity.NBT_SUITCASE_ID);
+        if (!nbt.hasUUID(SuitcaseBlockEntity.NBT_SUITCASE_ID)) return false;
+        UUID id = nbt.getUUID(SuitcaseBlockEntity.NBT_SUITCASE_ID);
 
         return expectedSuitcaseId.equals(id);
     }
 
-    private void cleanUpSuitcaseItemNbt(ItemStack stack, ServerPlayerEntity player, String keystoneName) {
-        NbtComponent component = stack.get(DataComponentTypes.BLOCK_ENTITY_DATA);
+    private void cleanUpSuitcaseItemNbt(ItemStack stack, ServerPlayer player, String keystoneName) {
+        CustomData component = stack.get(DataComponents.BLOCK_ENTITY_DATA);
         if (component == null) return;
 
-        NbtElement raw = component.copyNbt();
-        if (!(raw instanceof NbtCompound tag)) return;
+        CompoundTag tag = component.copyTag();
 
-        if (tag.contains("EnteredPlayers", NbtElement.LIST_TYPE)) {
-            NbtList old = tag.getList("EnteredPlayers", NbtElement.COMPOUND_TYPE);
-            NbtList kept = new NbtList();
+        if (tag.contains("EnteredPlayers", Tag.TAG_LIST)) {
+            ListTag old = tag.getList("EnteredPlayers", Tag.TAG_COMPOUND);
+            ListTag kept = new ListTag();
             boolean removed = false;
 
             for (int i = 0; i < old.size(); i++) {
-                NbtCompound entry = old.getCompound(i);
-                if (player.getUuidAsString().equals(entry.getString("UUID"))) removed = true;
+                CompoundTag entry = old.getCompound(i);
+                if (player.getStringUUID().equals(entry.getString("UUID"))) removed = true;
                 else kept.add(entry);
             }
 
             if (removed) {
                 tag.put("EnteredPlayers", kept);
-                stack.set(DataComponentTypes.BLOCK_ENTITY_DATA, NbtComponent.of(tag));
+                stack.set(DataComponents.BLOCK_ENTITY_DATA, CustomData.of(tag));
                 updateItemLore(stack, kept.size(), keystoneName, tag.getBoolean("Locked"));
             }
         }
@@ -336,10 +336,10 @@ public class PocketPortalBlock extends Block {
 
         if (isSuitcaseWithKeystoneAndId(stack, keystone, id)) return true;
 
-        ContainerComponent cc = stack.get(DataComponentTypes.CONTAINER);
+        ItemContainerContents cc = stack.get(DataComponents.CONTAINER);
         if (cc == null) return false;
 
-        for (ItemStack inner : cc.iterateNonEmpty()) {
+        for (ItemStack inner : cc.nonEmptyItems()) {
             if (containsSuitcaseWithKeystoneAndId(inner, keystone, id, depth - 1)) return true;
         }
         return false;
@@ -347,18 +347,18 @@ public class PocketPortalBlock extends Block {
 
 
     private void updateItemLore(ItemStack stack, int playerCount, String keystone, boolean locked) {
-        List<Text> lines = new ArrayList<>();
+        List<Component> lines = new ArrayList<>();
 
         if (playerCount > 0) {
-            lines.add(Text.literal("⚠ Contains " + playerCount + " Traveler(s)!")
-                    .formatted(Formatting.RED));
+            lines.add(Component.literal("⚠ Contains " + playerCount + " Traveler(s)!")
+                    .withStyle(ChatFormatting.RED));
         }
 
-        lines.add(Text.literal("Bound to: " + (locked ? "§k" : "") + keystone.replace("_", " "))
-                .formatted(Formatting.GRAY));
-        lines.add(Text.literal(locked ? "§cLocked" : "§aUnlocked")
-                .formatted(Formatting.GRAY));
+        lines.add(Component.literal("Bound to: " + (locked ? "§k" : "") + keystone.replace("_", " "))
+                .withStyle(ChatFormatting.GRAY));
+        lines.add(Component.literal(locked ? "§cLocked" : "§aUnlocked")
+                .withStyle(ChatFormatting.GRAY));
 
-        stack.set(DataComponentTypes.LORE, new LoreComponent(lines));
+        stack.set(DataComponents.LORE, new ItemLore(lines));
     }
 }

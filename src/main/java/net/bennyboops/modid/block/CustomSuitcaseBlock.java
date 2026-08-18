@@ -1,22 +1,18 @@
 package net.bennyboops.modid.block;
 
 import com.mojang.serialization.MapCodec;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.BlockWithEntity;
-import net.minecraft.block.ShapeContext;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.sound.SoundCategory;
-import net.minecraft.sound.SoundEvent;
-import net.minecraft.util.ActionResult;
-import net.minecraft.util.Hand;
-import net.minecraft.util.hit.BlockHitResult;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.shape.VoxelShape;
-import net.minecraft.world.BlockView;
-import net.minecraft.world.World;
+import net.minecraft.core.BlockPos;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.block.BaseEntityBlock;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.phys.shapes.CollisionContext;
+import net.minecraft.world.phys.shapes.VoxelShape;
 
 public class CustomSuitcaseBlock extends SuitcaseBlock {
-    public static final MapCodec<CustomSuitcaseBlock> CODEC = createCodec(CustomSuitcaseBlock::new);
+    public static final MapCodec<CustomSuitcaseBlock> CODEC = simpleCodec(CustomSuitcaseBlock::new);
 
     protected final VoxelShape customShapeN;
     protected final VoxelShape customShapeS;
@@ -26,7 +22,7 @@ public class CustomSuitcaseBlock extends SuitcaseBlock {
     protected final SoundEvent openSound;
     protected final SoundEvent closeSound;
 
-    public CustomSuitcaseBlock(Settings settings, VoxelShape shape, SoundEvent openSound, SoundEvent closeSound) {
+    public CustomSuitcaseBlock(Properties settings, VoxelShape shape, SoundEvent openSound, SoundEvent closeSound) {
         super(settings);
         this.customShapeN = shape;
         this.customShapeS = shape;
@@ -37,21 +33,21 @@ public class CustomSuitcaseBlock extends SuitcaseBlock {
     }
 
     // Constructor for codec (just uses default shape and sounds)
-    public CustomSuitcaseBlock(Settings settings) {
+    public CustomSuitcaseBlock(Properties settings) {
         this(settings,
-                createCuboidShape(0, 0, 0, 16, 15, 16),
-                net.minecraft.sound.SoundEvents.BLOCK_BARREL_OPEN,
-                net.minecraft.sound.SoundEvents.BLOCK_BARREL_CLOSE);
+                Block.box(0, 0, 0, 16, 15, 16),
+                SoundEvents.BARREL_OPEN,
+                SoundEvents.BARREL_CLOSE);
     }
 
     @Override
-    protected MapCodec<? extends BlockWithEntity> getCodec() {
+    protected MapCodec<? extends BaseEntityBlock> codec() {
         return CODEC;
     }
 
     @Override
-    public VoxelShape getOutlineShape(BlockState state, BlockView world, BlockPos pos, ShapeContext context) {
-        return switch (state.get(FACING)) {
+    protected VoxelShape getShape(BlockState state, BlockGetter world, BlockPos pos, CollisionContext context) {
+        return switch (state.getValue(FACING)) {
             case NORTH -> customShapeN;
             case SOUTH -> customShapeS;
             case EAST -> customShapeE;
