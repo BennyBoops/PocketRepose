@@ -11,7 +11,4 @@ HELLO FRIENDS!
 - **Private Dimensions:** Create custom dimensions that serve as a personal space for exploration, storage, and building.
 - **Unique Keys:** Each new dimension is custom. Rename your key to give your dimension a unique identity.
 - **Entry and Exit:** Seamlessly enter and exit your private dimension using the suitcase block. Multiplayer compatible. Let your friends carry you around!
-
-## Work In Progress
-
 - **Mob Entry:** Right-click on mobs to store in your suitcase.
