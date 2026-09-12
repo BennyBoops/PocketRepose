@@ -1,18 +1,15 @@
 {
 	"required": true,
-	"minVersion": "0.8",
+	"minVersion": "0.8.5",
 	"package": "net.bennyboops.modid.mixin",
-	"compatibilityLevel": "JAVA_17",
+	"compatibilityLevel": "JAVA_21",
 	"mixins": [
-		"AnvilScreenHandlerMixin",
-		"BedBlockMixin",
-		"MinecraftServerAccess",
-		"MinecraftServerMixin",
-		"ServerChunkManagerMixin",
-		"ServerWorldMixin",
-		"DimensionOptionsMixin",
-		"SimpleRegistryMixin",
-		"ExampleMixin"
+		"AnvilMenuMixin",
+		"LevelStemMixin",
+		"MappedRegistryMixin",
+		"ServerChunkCacheMixin",
+		"ServerLevelMixin",
+		"ServerPlayerRespawnMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

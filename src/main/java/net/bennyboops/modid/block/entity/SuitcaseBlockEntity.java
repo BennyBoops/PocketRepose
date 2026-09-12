@@ -2,19 +2,19 @@ package net.bennyboops.modid.block.entity;
 
 import net.bennyboops.modid.data.SuitcaseLocationTracker;
 import net.bennyboops.modid.data.SuitcaseRegistrySavedData;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.entity.BlockEntity;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtList;
-import net.minecraft.network.listener.ClientPlayPacketListener;
-import net.minecraft.network.packet.Packet;
-import net.minecraft.network.packet.s2c.play.BlockEntityUpdateS2CPacket;
-import net.minecraft.registry.RegistryWrapper;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.World;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
@@ -49,8 +49,8 @@ public class SuitcaseBlockEntity extends BlockEntity {
             this.suitcasePos = suitcasePos;
         }
 
-        public NbtCompound toNbt() {
-            NbtCompound nbt = new NbtCompound();
+        public CompoundTag toNbt() {
+            CompoundTag nbt = new CompoundTag();
             nbt.putString("UUID", uuid);
             nbt.putDouble("X", x);
             nbt.putDouble("Y", y);
@@ -63,7 +63,7 @@ public class SuitcaseBlockEntity extends BlockEntity {
             return nbt;
         }
 
-        public static EnteredPlayerData fromNbt(NbtCompound nbt) {
+        public static EnteredPlayerData fromNbt(CompoundTag nbt) {
             return new EnteredPlayerData(
                     nbt.getString("UUID"),
                     nbt.getDouble("X"),
@@ -77,14 +77,14 @@ public class SuitcaseBlockEntity extends BlockEntity {
     }
 
     public SuitcaseBlockEntity(BlockPos pos, BlockState state) {
-        super(ModBlockEntities.SUITCASE_BLOCK_ENTITY, pos, state);
+        super(ModBlockEntities.SUITCASE_BLOCK_ENTITY.get(), pos, state);
     }
 
-    public boolean canOpenInDimension(World world) {
+    public boolean canOpenInDimension(Level world) {
         if (world == null) return true;
         if (boundKeystoneName == null || boundKeystoneName.isEmpty()) return true;
 
-        String currentDim = world.getRegistryKey().getValue().toString();
+        String currentDim = world.dimension().location().toString();
         String ownPocketDim = "pocket-repose:pocket_dimension_" + boundKeystoneName;
 
         return !currentDim.equals(ownPocketDim);
@@ -96,47 +96,47 @@ public class SuitcaseBlockEntity extends BlockEntity {
 
     private static final Set<UUID> PLAYERS_WHO_ENTERED = new HashSet<>();
 
-    public boolean isFirstTimeEntering(ServerPlayerEntity player) {
-        return !PLAYERS_WHO_ENTERED.contains(player.getUuid());
+    public boolean isFirstTimeEntering(ServerPlayer player) {
+        return !PLAYERS_WHO_ENTERED.contains(player.getUUID());
     }
 
-    public void playerEntered(ServerPlayerEntity player) {
-        enteredPlayers.removeIf(data -> data.uuid.equals(player.getUuidAsString()));
+    public void playerEntered(ServerPlayer player) {
+        enteredPlayers.removeIf(data -> data.uuid.equals(player.getStringUUID()));
 
         EnteredPlayerData data = new EnteredPlayerData(
-                player.getUuidAsString(),
+                player.getStringUUID(),
                 player.getX(), player.getY(), player.getZ(),
-                player.getPitch(), player.getYaw(),
-                this.getPos()
+                player.getXRot(), player.getYRot(),
+                this.getBlockPos()
         );
         enteredPlayers.add(data);
 
-        PLAYERS_WHO_ENTERED.add(player.getUuid());
+        PLAYERS_WHO_ENTERED.add(player.getUUID());
 
         Map<String, BlockPos> suitcases = SUITCASE_REGISTRY.computeIfAbsent(
                 boundKeystoneName, k -> new HashMap<>()
         );
-        suitcases.put(player.getUuidAsString(), this.getPos());
+        suitcases.put(player.getStringUUID(), this.getBlockPos());
 
         MinecraftServer server = player.getServer();
         if (server != null && boundKeystoneName != null) {
             SuitcaseLocationTracker tracker = SuitcaseLocationTracker.get(server);
             if (tracker != null) {
 
-                tracker.setLastSuitcase(boundKeystoneName, player.getUuidAsString(), this.getSuitcaseId());
+                tracker.setLastSuitcase(boundKeystoneName, player.getStringUUID(), this.getSuitcaseId());
 
-                String dimId = player.getServerWorld().getRegistryKey().getValue().toString();
+                String dimId = player.serverLevel().dimension().location().toString();
                 UUID suitcaseId = this.getSuitcaseId();
 
-                tracker.setLastSuitcase(boundKeystoneName, player.getUuidAsString(), suitcaseId);
+                tracker.setLastSuitcase(boundKeystoneName, player.getStringUUID(), suitcaseId);
 
                 tracker.updateLocation(
                         boundKeystoneName,
-                        player.getUuidAsString(),
+                        player.getStringUUID(),
                         dimId,
                         suitcaseId,
                         player.getX(), player.getY(), player.getZ(),
-                        player.getYaw(), player.getPitch(),
+                        player.getYRot(), player.getXRot(),
                         SuitcaseLocationTracker.LocationType.ENTRY
                 );
 
@@ -144,7 +144,7 @@ public class SuitcaseBlockEntity extends BlockEntity {
             SuitcaseRegistrySavedData.onRegistryChanged(server);
         }
 
-        markDirty();
+        setChanged();
     }
 
     public EnteredPlayerData getExitPosition(String playerUuid) {
@@ -152,14 +152,14 @@ public class SuitcaseBlockEntity extends BlockEntity {
             if (data.uuid.equals(playerUuid)) {
                 EnteredPlayerData exitData = new EnteredPlayerData(
                         data.uuid,
-                        this.getPos().getX() + 0.5,
-                        this.getPos().getY() + 1.0,
-                        this.getPos().getZ() + 0.5,
+                        this.getBlockPos().getX() + 0.5,
+                        this.getBlockPos().getY() + 1.0,
+                        this.getBlockPos().getZ() + 0.5,
                         data.pitch, data.yaw,
-                        this.getPos()
+                        this.getBlockPos()
                 );
                 enteredPlayers.remove(data);
-                markDirty();
+                setChanged();
                 return exitData;
             }
         }
@@ -168,7 +168,7 @@ public class SuitcaseBlockEntity extends BlockEntity {
 
     public void bindKeystone(String keystoneName) {
         this.boundKeystoneName = keystoneName;
-        markDirty();
+        setChanged();
     }
 
     public String getBoundKeystoneName() {
@@ -177,7 +177,7 @@ public class SuitcaseBlockEntity extends BlockEntity {
 
     public void setLocked(boolean locked) {
         this.isLocked = locked;
-        markDirty();
+        setChanged();
     }
 
     public boolean isLocked() {
@@ -185,27 +185,27 @@ public class SuitcaseBlockEntity extends BlockEntity {
     }
 
     @Override
-    protected void writeNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup registry) {
-        nbt.putUuid(NBT_SUITCASE_ID, suitcaseId);
+    protected void saveAdditional(CompoundTag nbt, HolderLookup.Provider registry) {
+        super.saveAdditional(nbt, registry);
+
+        nbt.putUUID(NBT_SUITCASE_ID, suitcaseId);
 
         if (boundKeystoneName != null) nbt.putString("BoundKeystone", boundKeystoneName);
 
         nbt.putBoolean("Locked", isLocked);
         nbt.putBoolean("DimensionLocked", dimensionLocked);
 
-        NbtList players = new NbtList();
+        ListTag players = new ListTag();
         for (EnteredPlayerData data : enteredPlayers) players.add(data.toNbt());
         nbt.put("EnteredPlayers", players);
-
-        super.writeNbt(nbt, registry);
     }
 
     @Override
-    public void readNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup registry) {
-        super.readNbt(nbt, registry);
+    protected void loadAdditional(CompoundTag nbt, HolderLookup.Provider registry) {
+        super.loadAdditional(nbt, registry);
 
-        if (nbt.containsUuid(NBT_SUITCASE_ID)) {
-            suitcaseId = nbt.getUuid(NBT_SUITCASE_ID);
+        if (nbt.hasUUID(NBT_SUITCASE_ID)) {
+            suitcaseId = nbt.getUUID(NBT_SUITCASE_ID);
         } else {
             suitcaseId = UUID.randomUUID();
         }
@@ -215,21 +215,22 @@ public class SuitcaseBlockEntity extends BlockEntity {
         dimensionLocked = nbt.contains("DimensionLocked") && nbt.getBoolean("DimensionLocked");
 
         enteredPlayers.clear();
-        if (nbt.contains("EnteredPlayers", NbtElement.LIST_TYPE)) {
-            for (NbtElement e : nbt.getList("EnteredPlayers", NbtElement.COMPOUND_TYPE)) {
-                enteredPlayers.add(EnteredPlayerData.fromNbt((NbtCompound) e));
+        if (nbt.contains("EnteredPlayers", Tag.TAG_LIST)) {
+            for (Tag e : nbt.getList("EnteredPlayers", Tag.TAG_COMPOUND)) {
+                enteredPlayers.add(EnteredPlayerData.fromNbt((CompoundTag) e));
             }
         }
     }
 
     @Nullable
-    public Packet<ClientPlayPacketListener> toUpdatePacket(RegistryWrapper.WrapperLookup registry) {
-        return BlockEntityUpdateS2CPacket.create(this);
+    @Override
+    public Packet<ClientGamePacketListener> getUpdatePacket() {
+        return ClientboundBlockEntityDataPacket.create(this);
     }
 
     @Override
-    public NbtCompound toInitialChunkDataNbt(RegistryWrapper.WrapperLookup registry) {
-        return createNbtWithId(registry);
+    public CompoundTag getUpdateTag(HolderLookup.Provider registry) {
+        return saveWithId(registry);
     }
 
     public static final Map<String, Map<String, BlockPos>> SUITCASE_REGISTRY =
@@ -274,7 +275,7 @@ public class SuitcaseBlockEntity extends BlockEntity {
             suitcases.put(playerUuid, newPos);
         }
 
-        markDirty();
+        setChanged();
     }
 
     public static void initializeSuitcaseRegistry(Map<String, Map<String, BlockPos>> savedRegistry) {

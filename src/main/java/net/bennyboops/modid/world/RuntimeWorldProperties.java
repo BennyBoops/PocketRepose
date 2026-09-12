@@ -1,17 +1,16 @@
 package net.bennyboops.modid.world;
 
 import net.minecraft.world.Difficulty;
-import net.minecraft.world.GameRules;
-import net.minecraft.world.SaveProperties;
-import net.minecraft.world.level.UnmodifiableLevelProperties;
-import net.bennyboops.modid.world.RuntimeWorldConfig;
+import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.storage.DerivedLevelData;
+import net.minecraft.world.level.storage.WorldData;
 
-public final class RuntimeWorldProperties extends UnmodifiableLevelProperties {
+public final class RuntimeWorldProperties extends DerivedLevelData {
     protected final RuntimeWorldConfig config;
     private final GameRules rules;
 
-    public RuntimeWorldProperties(SaveProperties saveProperties, RuntimeWorldConfig config) {
-        super(saveProperties, saveProperties.getMainWorldProperties());
+    public RuntimeWorldProperties(WorldData worldData, RuntimeWorldConfig config) {
+        super(worldData, worldData.overworldData());
         this.config = config;
 
         this.rules = new GameRules();
@@ -24,12 +23,12 @@ public final class RuntimeWorldProperties extends UnmodifiableLevelProperties {
     }
 
     @Override
-    public void setTimeOfDay(long timeOfDay) {
+    public void setDayTime(long timeOfDay) {
         this.config.setTimeOfDay(timeOfDay);
     }
 
     @Override
-    public long getTimeOfDay() {
+    public long getDayTime() {
         return this.config.getTimeOfDay();
     }
 

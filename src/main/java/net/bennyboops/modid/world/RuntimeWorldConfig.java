@@ -2,17 +2,18 @@ package net.bennyboops.modid.world;
 
 import com.google.common.base.Preconditions;
 import net.bennyboops.modid.util.GameRuleStore;
-import net.fabricmc.fabric.api.util.TriState;
-import net.minecraft.registry.RegistryKey;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.registry.entry.RegistryEntry;
+import net.minecraft.core.Holder;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.Difficulty;
-import net.minecraft.world.GameRules;
-import net.minecraft.world.dimension.DimensionOptions;
-import net.minecraft.world.dimension.DimensionType;
-import net.minecraft.world.gen.chunk.ChunkGenerator;
+import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.chunk.ChunkGenerator;
+import net.minecraft.world.level.dimension.DimensionType;
+import net.minecraft.world.level.dimension.LevelStem;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.Optional;
 
 /**
  * A configuration describing how a runtime world should be constructed. This includes properties such as the dimension
@@ -22,8 +23,8 @@ import org.jetbrains.annotations.Nullable;
  */
 public final class RuntimeWorldConfig {
     private long seed = 0;
-    private RegistryKey<DimensionType> dimensionTypeKey = Fantasy.DEFAULT_DIM_TYPE;
-    private RegistryEntry<DimensionType> dimensionType;
+    private ResourceKey<DimensionType> dimensionTypeKey = Fantasy.DEFAULT_DIM_TYPE;
+    private Holder<DimensionType> dimensionType;
     private ChunkGenerator generator = null;
     private boolean shouldTickTime = false;
     private long timeOfDay = 6000;
@@ -38,7 +39,7 @@ public final class RuntimeWorldConfig {
     private int rainTime;
     private boolean thundering;
     private int thunderTime;
-    private TriState flat = TriState.DEFAULT;
+    private Optional<Boolean> flat = Optional.empty();
 
     /**
      * Sets the world seed
@@ -71,7 +72,7 @@ public final class RuntimeWorldConfig {
      *
      * @return The same instance of RuntimeWorldConfig
      */
-    public RuntimeWorldConfig setDimensionType(RegistryEntry<DimensionType> dimensionType) {
+    public RuntimeWorldConfig setDimensionType(Holder<DimensionType> dimensionType) {
         this.dimensionType = dimensionType;
         this.dimensionTypeKey = null;
         return this;
@@ -82,14 +83,14 @@ public final class RuntimeWorldConfig {
      *
      * @param dimensionType The dimension type to use
      *
-     * @deprecated Pleas use {@link RuntimeWorldConfig#setDimensionType(RegistryKey)}
-     * or {@link RuntimeWorldConfig#setDimensionType(RegistryEntry)} instead
+     * @deprecated Please use {@link RuntimeWorldConfig#setDimensionType(ResourceKey)}
+     * or {@link RuntimeWorldConfig#setDimensionType(Holder)} instead
      *
      * @return The same instance of RuntimeWorldConfig
      */
     @Deprecated
     public RuntimeWorldConfig setDimensionType(DimensionType dimensionType) {
-        this.dimensionType = RegistryEntry.of(dimensionType);
+        this.dimensionType = Holder.direct(dimensionType);
         this.dimensionTypeKey = null;
         return this;
     }
@@ -101,7 +102,7 @@ public final class RuntimeWorldConfig {
      *
      * @return The same instance of RuntimeWorldConfig
      */
-    public RuntimeWorldConfig setDimensionType(RegistryKey<DimensionType> dimensionType) {
+    public RuntimeWorldConfig setDimensionType(ResourceKey<DimensionType> dimensionType) {
         this.dimensionTypeKey = dimensionType;
         this.dimensionType = null;
         return this;
@@ -122,7 +123,7 @@ public final class RuntimeWorldConfig {
     /**
      * Defines whenever the world should tick time.
      * <br/>
-     * Setting this set's the {@link GameRules#DO_DAYLIGHT_CYCLE}
+     * Setting this set's the {@link GameRules#RULE_DAYLIGHT}
      * gamerule for the world to avoid jitter
      * <br/>
      * <br/>
@@ -134,7 +135,7 @@ public final class RuntimeWorldConfig {
      */
     public RuntimeWorldConfig setShouldTickTime(boolean shouldTickTime) {
         this.shouldTickTime = shouldTickTime;
-        this.gameRules.set(GameRules.DO_DAYLIGHT_CYCLE, shouldTickTime);
+        this.gameRules.set(GameRules.RULE_DAYLIGHT, shouldTickTime);
         return this;
     }
 
@@ -172,7 +173,7 @@ public final class RuntimeWorldConfig {
      *
      * @return The same instance of RuntimeWorldConfig
      */
-    public RuntimeWorldConfig setGameRule(GameRules.Key<GameRules.BooleanRule> key, boolean value) {
+    public RuntimeWorldConfig setGameRule(GameRules.Key<GameRules.BooleanValue> key, boolean value) {
         this.gameRules.set(key, value);
         return this;
     }
@@ -187,7 +188,7 @@ public final class RuntimeWorldConfig {
      *
      * @return The same instance of RuntimeWorldConfig
      */
-    public RuntimeWorldConfig setGameRule(GameRules.Key<GameRules.IntRule> key, int value) {
+    public RuntimeWorldConfig setGameRule(GameRules.Key<GameRules.IntegerValue> key, int value) {
         this.gameRules.set(key, value);
         return this;
     }
@@ -284,11 +285,11 @@ public final class RuntimeWorldConfig {
     /**
      * Defines if the world is a flat world or not
      *
-     * @param state If the world should be flat, not flat or use the default value
+     * @param state If the world should be flat, not flat, or empty to use the dimension default
      *
      * @return The same instance of RuntimeWorldConfig
      */
-    public RuntimeWorldConfig setFlat(TriState state) {
+    public RuntimeWorldConfig setFlat(Optional<Boolean> state) {
         this.flat = state;
         return this;
     }
@@ -301,7 +302,7 @@ public final class RuntimeWorldConfig {
      * @return The same instance of RuntimeWorldConfig
      */
     public RuntimeWorldConfig setFlat(boolean state) {
-        return this.setFlat(TriState.of(state));
+        return this.setFlat(Optional.of(state));
     }
 
     public long getSeed() {
@@ -313,9 +314,9 @@ public final class RuntimeWorldConfig {
      *
      * @return The new dimension options
      */
-    public DimensionOptions createDimensionOptions(MinecraftServer server) {
+    public LevelStem createDimensionOptions(MinecraftServer server) {
         var dimensionType = this.resolveDimensionType(server);
-        return new DimensionOptions(dimensionType, this.generator);
+        return new LevelStem(dimensionType, this.generator);
     }
 
     /**
@@ -323,10 +324,11 @@ public final class RuntimeWorldConfig {
      *
      * @return The dimension type
      */
-    private RegistryEntry<DimensionType> resolveDimensionType(MinecraftServer server) {
+    private Holder<DimensionType> resolveDimensionType(MinecraftServer server) {
         var dimensionType = this.dimensionType;
         if (dimensionType == null) {
-            dimensionType = server.getRegistryManager().get(RegistryKeys.DIMENSION_TYPE).getEntry(this.dimensionTypeKey).orElse(null);
+            dimensionType = server.registryAccess().registryOrThrow(Registries.DIMENSION_TYPE)
+                    .getHolder(this.dimensionTypeKey).orElse(null);
             Preconditions.checkNotNull(dimensionType, "invalid dimension type " + this.dimensionTypeKey);
         }
         return dimensionType;
@@ -399,7 +401,7 @@ public final class RuntimeWorldConfig {
         return this.thundering;
     }
 
-    public TriState isFlat() {
+    public Optional<Boolean> isFlat() {
         return this.flat;
     }
 }

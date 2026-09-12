@@ -1,41 +1,58 @@
 package net.bennyboops.modid.world;
 
+import com.mojang.serialization.MapCodec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.bennyboops.modid.block.ModBlocks;
-import net.minecraft.block.BlockState;
-import net.minecraft.registry.RegistryKeys;
-import net.minecraft.util.Identifier;
-import net.minecraft.util.math.ChunkPos;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.ChunkRegion;
-import net.minecraft.world.StructureWorldAccess;
-import net.minecraft.world.biome.Biome;
-import net.minecraft.world.chunk.Chunk;
-import net.minecraft.world.gen.StructureAccessor;
-import net.minecraft.registry.Registry;
-import net.minecraft.registry.RegistryKey;
 import net.bennyboops.modid.util.VoidChunkGenerator;
-import net.minecraft.world.gen.chunk.Blender;
-import net.minecraft.world.gen.noise.NoiseConfig;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Holder;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.WorldGenRegion;
+import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.StructureManager;
+import net.minecraft.world.level.biome.Biome;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.ChunkAccess;
+import net.minecraft.world.level.chunk.ChunkGenerator;
+import net.minecraft.world.level.levelgen.RandomState;
+import net.minecraft.world.level.levelgen.blending.Blender;
 
 import java.util.concurrent.CompletableFuture;
 
 public class PortalChunkGenerator extends VoidChunkGenerator {
-    private final BlockState portalState = ModBlocks.PORTAL.getDefaultState();
+    public static final MapCodec<PortalChunkGenerator> CODEC = RecordCodecBuilder.mapCodec(instance -> instance.group(
+            Biome.CODEC.stable().fieldOf("biome").forGetter(PortalChunkGenerator::getBiome)
+    ).apply(instance, instance.stable(PortalChunkGenerator::new)));
+
+    public static final ResourceKey<Biome> POCKET_ISLANDS = ResourceKey.create(Registries.BIOME,
+            ResourceLocation.fromNamespaceAndPath("pocket-repose", "pocket_islands"));
+
+    public PortalChunkGenerator(Holder<Biome> biome) {
+        super(biome);
+    }
 
     public PortalChunkGenerator(Registry<Biome> biomeRegistry) {
-        super(biomeRegistry,
-                RegistryKey.of(RegistryKeys.BIOME, Identifier.of("pocket-repose", "pocket_islands")));
+        super(biomeRegistry, POCKET_ISLANDS);
     }
 
     @Override
-    public CompletableFuture<Chunk> populateNoise(Blender blender, NoiseConfig noiseConfig,
-                                                  StructureAccessor accessor, Chunk chunk) {
+    protected MapCodec<? extends ChunkGenerator> codec() {
+        return CODEC;
+    }
+
+    @Override
+    public CompletableFuture<ChunkAccess> fillFromNoise(Blender blender, RandomState randomState,
+                                                        StructureManager structureManager, ChunkAccess chunk) {
         return CompletableFuture.completedFuture(chunk);
     }
 
     @Override
-    public void buildSurface(ChunkRegion region, StructureAccessor structures,
-                             NoiseConfig noiseConfig, Chunk chunk) {
+    public void buildSurface(WorldGenRegion region, StructureManager structureManager,
+                             RandomState randomState, ChunkAccess chunk) {
+        BlockState portalState = ModBlocks.PORTAL.get().defaultBlockState();
         ChunkPos chunkPos = chunk.getPos();
 
         for (int dy = -64; dy <= -61; dy++) {
@@ -51,49 +68,3 @@ public class PortalChunkGenerator extends VoidChunkGenerator {
         }
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-    /**
-    @Override
-    public CompletableFuture<Chunk> populateNoise(Blender blender, NoiseConfig noiseConfig, StructureAccessor accessor, Chunk chunk) {
-        // Move portal generation to populateNoise instead of generateFeatures
-        // This ensures portals are generated during initial chunk creation
-        ChunkPos chunkPos = chunk.getPos();
-
-        for (int dy = -64; dy <= -61; dy++) {
-            for (int dx = 0; dx < 16; dx++) {
-                for (int dz = 0; dz < 16; dz++) {
-                    int worldX = (chunkPos.x << 4) + dx;
-                    int worldZ = (chunkPos.z << 4) + dz;
-                    BlockPos blockPos = new BlockPos(worldX, dy, worldZ);
-
-                    // Set block state directly in the chunk during noise population
-                    chunk.setBlockState(blockPos, portalState, false);
-                }
-            }
-        }
-
-        return CompletableFuture.completedFuture(chunk);
-    }
-
-    @Override
-    public void generateFeatures(
-            StructureWorldAccess world,
-            Chunk chunk,
-            StructureAccessor structureAccessor
-    ) {
-        super.generateFeatures(world, chunk, structureAccessor);
-        // Features generation is now empty since we moved portal generation to populateNoise
-    }
-}
-
-     **/

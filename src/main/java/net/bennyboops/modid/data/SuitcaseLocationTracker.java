@@ -1,26 +1,26 @@
 package net.bennyboops.modid.data;
 
-import net.minecraft.datafixer.DataFixTypes;
-import net.minecraft.nbt.NbtCompound;
-import net.minecraft.nbt.NbtElement;
-import net.minecraft.nbt.NbtList;
-import net.minecraft.registry.RegistryWrapper;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.util.math.BlockPos;
-import net.minecraft.world.PersistentState;
-import net.minecraft.world.PersistentStateManager;
-import net.minecraft.world.World;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.datafix.DataFixTypes;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.saveddata.SavedData;
+import net.minecraft.world.level.storage.DimensionDataStorage;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-public class SuitcaseLocationTracker extends PersistentState {
+public class SuitcaseLocationTracker extends SavedData {
 
     public static final String DATA_NAME = "pocket_repose_suitcase_locations";
 
-    public static final Type<SuitcaseLocationTracker> TYPE = new Type<>(
+    public static final SavedData.Factory<SuitcaseLocationTracker> TYPE = new SavedData.Factory<>(
             SuitcaseLocationTracker::new,
             SuitcaseLocationTracker::fromNbt,
             DataFixTypes.LEVEL
@@ -58,10 +58,10 @@ public class SuitcaseLocationTracker extends PersistentState {
             this.timestamp = System.currentTimeMillis();
         }
 
-        public NbtCompound toNbt() {
-            NbtCompound nbt = new NbtCompound();
+        public CompoundTag toNbt() {
+            CompoundTag nbt = new CompoundTag();
             nbt.putString("dim", dimensionId == null ? "" : dimensionId);
-            if (suitcaseId != null) nbt.putUuid("suitcaseId", suitcaseId);
+            if (suitcaseId != null) nbt.putUUID("suitcaseId", suitcaseId);
             nbt.putDouble("x", x);
             nbt.putDouble("y", y);
             nbt.putDouble("z", z);
@@ -72,9 +72,9 @@ public class SuitcaseLocationTracker extends PersistentState {
             return nbt;
         }
 
-        public static LocationData fromNbt(NbtCompound nbt) {
+        public static LocationData fromNbt(CompoundTag nbt) {
             String dim = nbt.getString("dim");
-            UUID sid = nbt.containsUuid("suitcaseId") ? nbt.getUuid("suitcaseId") : null;
+            UUID sid = nbt.hasUUID("suitcaseId") ? nbt.getUUID("suitcaseId") : null;
 
             LocationData data = new LocationData(
                     dim,
@@ -104,8 +104,8 @@ public class SuitcaseLocationTracker extends PersistentState {
             this.timestamp = System.currentTimeMillis();
         }
 
-        public NbtCompound toNbt() {
-            NbtCompound nbt = new NbtCompound();
+        public CompoundTag toNbt() {
+            CompoundTag nbt = new CompoundTag();
             nbt.putString("dim", dimensionId == null ? "" : dimensionId);
             nbt.putDouble("x", x);
             nbt.putDouble("y", y);
@@ -115,7 +115,7 @@ public class SuitcaseLocationTracker extends PersistentState {
             return nbt;
         }
 
-        public static SuitcaseInstanceLocation fromNbt(NbtCompound nbt) {
+        public static SuitcaseInstanceLocation fromNbt(CompoundTag nbt) {
             SuitcaseInstanceLocation loc = new SuitcaseInstanceLocation(
                     nbt.getString("dim"),
                     nbt.getDouble("x"),
@@ -130,50 +130,50 @@ public class SuitcaseLocationTracker extends PersistentState {
 
     public SuitcaseLocationTracker() {}
 
-    private static SuitcaseLocationTracker fromNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup lookup) {
+    private static SuitcaseLocationTracker fromNbt(CompoundTag nbt, HolderLookup.Provider lookup) {
         SuitcaseLocationTracker tracker = new SuitcaseLocationTracker();
 
-        if (nbt.contains("Locations", NbtElement.COMPOUND_TYPE)) {
-            NbtCompound ks = nbt.getCompound("Locations");
-            for (String keystone : ks.getKeys()) {
-                NbtList playerList = ks.getList(keystone, NbtElement.COMPOUND_TYPE);
+        if (nbt.contains("Locations", Tag.TAG_COMPOUND)) {
+            CompoundTag ks = nbt.getCompound("Locations");
+            for (String keystone : ks.getAllKeys()) {
+                ListTag playerList = ks.getList(keystone, Tag.TAG_COMPOUND);
                 Map<String, LocationData> map = new HashMap<>();
                 for (int i = 0; i < playerList.size(); i++) {
-                    NbtCompound rec = playerList.getCompound(i);
+                    CompoundTag rec = playerList.getCompound(i);
                     map.put(rec.getString("UUID"), LocationData.fromNbt(rec.getCompound("Location")));
                 }
                 tracker.locations.put(keystone, map);
             }
         }
 
-        if (nbt.contains("EntryLocations", NbtElement.COMPOUND_TYPE)) {
-            NbtCompound ks = nbt.getCompound("EntryLocations");
-            for (String keystone : ks.getKeys()) {
-                NbtList playerList = ks.getList(keystone, NbtElement.COMPOUND_TYPE);
+        if (nbt.contains("EntryLocations", Tag.TAG_COMPOUND)) {
+            CompoundTag ks = nbt.getCompound("EntryLocations");
+            for (String keystone : ks.getAllKeys()) {
+                ListTag playerList = ks.getList(keystone, Tag.TAG_COMPOUND);
                 Map<String, LocationData> map = new HashMap<>();
                 for (int i = 0; i < playerList.size(); i++) {
-                    NbtCompound rec = playerList.getCompound(i);
+                    CompoundTag rec = playerList.getCompound(i);
                     map.put(rec.getString("UUID"), LocationData.fromNbt(rec.getCompound("Location")));
                 }
                 tracker.entryLocations.put(keystone, map);
             }
         }
 
-        if (nbt.contains("LastSuitcase", NbtElement.COMPOUND_TYPE)) {
-            NbtCompound ks = nbt.getCompound("LastSuitcase");
-            for (String keystone : ks.getKeys()) {
-                NbtCompound players = ks.getCompound(keystone);
+        if (nbt.contains("LastSuitcase", Tag.TAG_COMPOUND)) {
+            CompoundTag ks = nbt.getCompound("LastSuitcase");
+            for (String keystone : ks.getAllKeys()) {
+                CompoundTag players = ks.getCompound(keystone);
                 Map<String, UUID> map = new HashMap<>();
-                for (String playerUuid : players.getKeys()) {
+                for (String playerUuid : players.getAllKeys()) {
                     try { map.put(playerUuid, UUID.fromString(players.getString(playerUuid))); } catch (Exception ignored) {}
                 }
                 tracker.lastSuitcase.put(keystone, map);
             }
         }
 
-        if (nbt.contains("SuitcaseLocations", NbtElement.COMPOUND_TYPE)) {
-            NbtCompound all = nbt.getCompound("SuitcaseLocations");
-            for (String sidStr : all.getKeys()) {
+        if (nbt.contains("SuitcaseLocations", Tag.TAG_COMPOUND)) {
+            CompoundTag all = nbt.getCompound("SuitcaseLocations");
+            for (String sidStr : all.getAllKeys()) {
                 try {
                     UUID sid = UUID.fromString(sidStr);
                     tracker.suitcaseLocations.put(sid, SuitcaseInstanceLocation.fromNbt(all.getCompound(sidStr)));
@@ -185,12 +185,12 @@ public class SuitcaseLocationTracker extends PersistentState {
     }
 
     @Override
-    public NbtCompound writeNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup lookup) {
-        NbtCompound locTop = new NbtCompound();
+    public CompoundTag save(CompoundTag nbt, HolderLookup.Provider lookup) {
+        CompoundTag locTop = new CompoundTag();
         for (var e : locations.entrySet()) {
-            NbtList list = new NbtList();
+            ListTag list = new ListTag();
             for (var p : e.getValue().entrySet()) {
-                NbtCompound rec = new NbtCompound();
+                CompoundTag rec = new CompoundTag();
                 rec.putString("UUID", p.getKey());
                 rec.put("Location", p.getValue().toNbt());
                 list.add(rec);
@@ -199,11 +199,11 @@ public class SuitcaseLocationTracker extends PersistentState {
         }
         nbt.put("Locations", locTop);
 
-        NbtCompound entryTop = new NbtCompound();
+        CompoundTag entryTop = new CompoundTag();
         for (var e : entryLocations.entrySet()) {
-            NbtList list = new NbtList();
+            ListTag list = new ListTag();
             for (var p : e.getValue().entrySet()) {
-                NbtCompound rec = new NbtCompound();
+                CompoundTag rec = new CompoundTag();
                 rec.putString("UUID", p.getKey());
                 rec.put("Location", p.getValue().toNbt());
                 list.add(rec);
@@ -212,9 +212,9 @@ public class SuitcaseLocationTracker extends PersistentState {
         }
         nbt.put("EntryLocations", entryTop);
 
-        NbtCompound last = new NbtCompound();
+        CompoundTag last = new CompoundTag();
         for (var e : lastSuitcase.entrySet()) {
-            NbtCompound players = new NbtCompound();
+            CompoundTag players = new CompoundTag();
             for (var p : e.getValue().entrySet()) {
                 players.putString(p.getKey(), p.getValue().toString());
             }
@@ -222,7 +222,7 @@ public class SuitcaseLocationTracker extends PersistentState {
         }
         nbt.put("LastSuitcase", last);
 
-        NbtCompound all = new NbtCompound();
+        CompoundTag all = new CompoundTag();
         for (var e : suitcaseLocations.entrySet()) {
             all.put(e.getKey().toString(), e.getValue().toNbt());
         }
@@ -232,17 +232,18 @@ public class SuitcaseLocationTracker extends PersistentState {
     }
 
     public static SuitcaseLocationTracker get(MinecraftServer server) {
-        ServerWorld overworld = server.getWorld(World.OVERWORLD);
+        if (server == null) return null;
+        ServerLevel overworld = server.getLevel(Level.OVERWORLD);
         if (overworld == null) return null;
-        PersistentStateManager mgr = overworld.getPersistentStateManager();
-        return mgr.getOrCreate(TYPE, DATA_NAME);
+        DimensionDataStorage mgr = overworld.getDataStorage();
+        return mgr.computeIfAbsent(TYPE, DATA_NAME);
     }
 
 
 
     public void setLastSuitcase(String keystone, String playerUuid, UUID suitcaseId) {
         lastSuitcase.computeIfAbsent(keystone, k -> new HashMap<>()).put(playerUuid, suitcaseId);
-        markDirty();
+        setDirty();
     }
 
     public UUID getLastSuitcase(String keystone, String playerUuid) {
@@ -262,7 +263,7 @@ public class SuitcaseLocationTracker extends PersistentState {
         locations.computeIfAbsent(keystone, k -> new HashMap<>())
                 .put(playerUuid, new LocationData(dimensionId, suitcaseId, x, y, z, yaw, pitch, type));
 
-        markDirty();
+        setDirty();
     }
 
     public void updateLocationFromBlock(String keystone, String playerUuid, String dimensionId, UUID suitcaseId,
@@ -286,7 +287,7 @@ public class SuitcaseLocationTracker extends PersistentState {
                                        double x, double y, double z, LocationType type) {
         if (suitcaseId == null) return;
         suitcaseLocations.put(suitcaseId, new SuitcaseInstanceLocation(dimensionId, x, y, z, type));
-        markDirty();
+        setDirty();
     }
 
     public void updateSuitcaseLocationFromBlock(UUID suitcaseId, String dimensionId, BlockPos pos) {
@@ -305,7 +306,7 @@ public class SuitcaseLocationTracker extends PersistentState {
             LocationData existing = playerMap.get(playerUuid);
             if (existing != null) {
                 existing.type = LocationType.DESTROYED;
-                markDirty();
+                setDirty();
             }
         }
     }
