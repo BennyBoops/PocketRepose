@@ -133,8 +133,16 @@ public class PocketPortalBlock extends Block {
         );
     }
 
+    /** Portal blocks at or below this height form the void floor, not an exit portal. */
+    private static final int FLOOR_TOP_Y = -60;
+
     @Override
     public void onEntityCollision(BlockState state, World world, BlockPos pos, Entity entity) {
+        // The world-wide floor under the island is made of this block too. Falling through it
+        // must never count as leaving; PocketVoidCatcher returns fallen entities to the entry.
+        if (pos.getY() <= FLOOR_TOP_Y) {
+            return;
+        }
         if (!world.isClient && entity instanceof ServerPlayerEntity player) {
             String currentDimension = world.getRegistryKey().getValue().getPath();
             if (currentDimension.startsWith("pocket_dimension_")) {

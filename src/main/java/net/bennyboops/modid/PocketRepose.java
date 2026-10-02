@@ -94,6 +94,9 @@ public class PocketRepose implements ModInitializer {
 		ModBlocks.registerModBlocks();
 		ModItemGroups.registerItemGroups();
 		ModBlockEntities.registerBlockEntities();
+		net.bennyboops.modid.particle.ModParticles.registerParticles();
+		net.bennyboops.modid.world.PocketTimeController.register();
+		net.bennyboops.modid.world.PocketVoidCatcher.register();
 
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
 			Path registryFile = server.getSavePath(WorldSavePath.ROOT)

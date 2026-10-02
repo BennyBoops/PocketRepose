@@ -2,7 +2,7 @@
   "carvers": {},
   "downfall": 0.5,
   "effects": {
-    "fog_color": 12638463,
+    "fog_color": 14202096,
     "mood_sound": {
       "block_search_extent": 8,
       "offset": 2,
@@ -15,9 +15,15 @@
         "replace_current_music": false
       }
     },
-    "sky_color": 8103167,
-    "water_color": 4159204,
-    "water_fog_color": 329011
+    "sky_color": 9339622,
+    "water_color": 6271958,
+    "water_fog_color": 2373215,
+    "particle": {
+      "options": {
+        "type": "pocket-repose:rune"
+      },
+      "probability": 0.00035
+    }
   },
   "features": [
     [],
