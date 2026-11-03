@@ -1,5 +1,7 @@
 package net.bennyboops.modid.mixin;
 
+import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
+import com.llamalad7.mixinextras.injector.wrapoperation.WrapOperation;
 import net.minecraft.network.packet.Packet;
 import net.minecraft.server.PlayerManager;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -10,7 +12,6 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import net.bennyboops.modid.world.FantasyWorldAccess;
 
@@ -19,6 +20,7 @@ import java.util.function.BooleanSupplier;
 
 @Mixin(ServerWorld.class)
 public abstract class ServerWorldMixin implements FantasyWorldAccess {
+    @Unique
     private static final int TICK_TIMEOUT = 20 * 15;
 
     @Unique
@@ -53,26 +55,25 @@ public abstract class ServerWorldMixin implements FantasyWorldAccess {
         return shouldTick || this.fantasy$tickTimeout > 0;
     }
 
+    @Unique
     private boolean isWorldEmpty() {
         return this.getPlayers().isEmpty() && this.getChunkManager().getLoadedChunkCount() <= 0;
     }
 
 
-/**
-    @Redirect(
+    @WrapOperation(
             method = "tickWeather",
             at = @At(
                     value = "INVOKE",
                     target = "Lnet/minecraft/server/PlayerManager;sendToAll(Lnet/minecraft/network/packet/Packet;)V"
             )
-
     )
-    private void dontSendRainPacketsToAllWorlds(PlayerManager instance, Packet<?> packet) {
+    private void dontSendRainPacketsToAllWorlds(PlayerManager instance, Packet<?> packet, Operation<Void> original) {
         // Vanilla sends rain packets to all players when rain starts in a world,
-        // even if they are not in it, meaning that if it is possible to rain in the world they are in
-        // the rain effect will remain until the player changes dimension or reconnects.
-        instance.sendToDimension(packet, this.getChunkManager().getWorld().getRegistryKey());
+        // even if they are not in it, meaning that overworld rain would leak into pocket dimensions
+        // (and stay stuck there until the player changes dimension or reconnects).
+        instance.sendToDimension(packet, ((ServerWorld) (Object) this).getRegistryKey());
     }
-**/
+
 
 }

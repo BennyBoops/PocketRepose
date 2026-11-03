@@ -1,17 +1,22 @@
 package net.bennyboops.modid.item;
 
 import net.bennyboops.modid.PocketRepose;
+import net.bennyboops.modid.block.ModBlocks;
 import net.bennyboops.modid.world.PortalChunkGenerator;
 import net.minecraft.block.Block;
-import net.minecraft.client.item.TooltipContext;
+import net.minecraft.block.Blocks;
 import net.minecraft.enchantment.Enchantments;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.decoration.ItemFrameEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.client.item.TooltipContext;
 import net.minecraft.nbt.NbtCompound;
+import net.minecraft.nbt.NbtIo;
 import net.minecraft.registry.*;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.world.ServerChunkManager;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
@@ -38,178 +43,252 @@ import java.util.*;
 
 public class KeystoneItem extends Item {
 
-    private static final Identifier POCKET_DIMENSION_TYPE_ID = new Identifier("pocket-repose", "pocket_dimension_type");
-
-    public KeystoneItem(Settings settings) {
-        super(settings);
-    }
+    public KeystoneItem(Settings settings) { super(settings); }
 
     @Override
-    public TypedActionResult<ItemStack> use(World world, PlayerEntity player, Hand hand) {
+    public TypedActionResult<ItemStack> use(World world,
+                                            PlayerEntity player,
+                                            Hand hand) {
         ItemStack stack = player.getStackInHand(hand);
-        String keystoneName = stack.getName().getString().toLowerCase();
-        String defaultName = "item.pocket-repose.keystone";
-        if (!stack.hasCustomName() || keystoneName.equals(defaultName)) {
+
+        String rawName      = Formatting.strip(stack.getName().getString());
+        String keystoneName = rawName.toLowerCase(Locale.ROOT);
+        if (!stack.hasCustomName()
+                || keystoneName.equals("item.pocket-repose.keystone")) {
             return TypedActionResult.pass(stack);
         }
+
         if (world.isClient) {
             return TypedActionResult.success(stack);
         }
-        if (stack.hasEnchantments()) {
-            return TypedActionResult.pass(stack);
-        }
-        String dimensionName = "pocket_dimension_" + keystoneName.replaceAll("[^a-z0-9_]", "");
 
+        String sanitizedName = keystoneName.replaceAll("[^a-z0-9_]", "");
+        if (sanitizedName.isEmpty()) {
+            // Names with no a-z/0-9/_ characters would all share the same "pocket_dimension_" world
+            player.sendMessage(Text.literal("Keystone name must contain letters or numbers")
+                    .formatted(Formatting.RED), true);
+            return TypedActionResult.fail(stack);
+        }
+
+        String dimensionName = "pocket_dimension_" + sanitizedName;
         createOrLoadPersistentDimension(world.getServer(), dimensionName);
 
-        // Mark keystone as bound
-        for (int i = 0; i < 20; i++) {
+        if (!stack.hasEnchantments()) {
             stack.addEnchantment(Enchantments.BINDING_CURSE, 1);
         }
-        stack.addHideFlag(ItemStack.TooltipSection.ENCHANTMENTS);
-        stack.addHideFlag(ItemStack.TooltipSection.MODIFIERS);
-        NbtCompound nbt = stack.getOrCreateNbt();
-        nbt.putInt("RepairCost", 32767);
+
         world.playSound(null, player.getX(), player.getY(), player.getZ(),
-                SoundEvents.BLOCK_AMETHYST_CLUSTER_FALL, SoundCategory.PLAYERS, 2.0F, 2.0F);
+                SoundEvents.BLOCK_AMETHYST_CLUSTER_FALL,
+                SoundCategory.PLAYERS, 2f, 2f);
+
         return TypedActionResult.success(stack);
     }
 
+    public static ServerWorld createOrLoadPersistentDimension(MinecraftServer server,
+                                                              String dimensionName) {
 
-    private void createOrLoadPersistentDimension(MinecraftServer server, String dimensionName) {
         Identifier worldId = new Identifier("pocket-repose", dimensionName);
-
-        Path worldSavePath = server.getSavePath(WorldSavePath.ROOT)
+        Path dimPath = server.getSavePath(WorldSavePath.ROOT)
                 .resolve("dimensions")
                 .resolve("pocket-repose")
                 .resolve(dimensionName);
-        boolean dimensionExists = Files.exists(worldSavePath);
+        // A world created this session may not have been saved to disk yet, so also check if it's loaded
+        boolean exists = Files.exists(dimPath)
+                || server.getWorld(RegistryKey.of(RegistryKeys.WORLD, worldId)) != null;
 
-        RegistryKey<DimensionType> typeKey = RegistryKey.of(RegistryKeys.DIMENSION_TYPE, POCKET_DIMENSION_TYPE_ID);
+        RuntimeWorldConfig cfg = PocketRepose.createPocketWorldConfig(server);
 
-        Registry<Biome> biomeRegistry = server.getRegistryManager().get(RegistryKeys.BIOME);
-
-        //RegistryKey<Biome> voidBiomeKey = RegistryKey.of(RegistryKeys.BIOME, new Identifier("minecraft", "the_void"));
-        RegistryKey<Biome> voidBiomeKey = RegistryKey.of(RegistryKeys.BIOME, new Identifier("pocket-repose", "pocket_islands"));
-
-        ChunkGenerator generator = new PortalChunkGenerator(biomeRegistry);
-
-        long seed = server.getOverworld().getSeed();
-
-        RuntimeWorldConfig config = new RuntimeWorldConfig()
-                .setDimensionType(typeKey)
-                .setGenerator(generator)
-                .setSeed(seed);
-
-        RuntimeWorldHandle handle = Fantasy.get(server)
-                .getOrOpenPersistentWorld(worldId, config);
+        RuntimeWorldHandle handle =
+                Fantasy.get(server).getOrOpenPersistentWorld(worldId, cfg);
 
         registerDimension(server, dimensionName);
 
-        if (!dimensionExists) {
-            ServerWorld world = handle.asWorld();
-            placeStructureImmediately(server, world, dimensionName);
-            System.out.println("Created new dimension with structure: " + dimensionName);
-        } else {
-            System.out.println("Loaded existing dimension: " + dimensionName);
-        }
-    }
-
-    private void placeStructureImmediately(MinecraftServer server, ServerWorld world, String dimensionName) {
-        try {
-            StructureTemplate template = server.getStructureTemplateManager()
-                    .getTemplate(new Identifier("pocket-repose", "pocket_island_01"))
-                    .orElse(null);
-
-            if (template != null) {
-                BlockPos pos = new BlockPos(0, 64, 0);
-
-                world.getChunk(pos);
-
-                template.place(
-                        world,
-                        pos,
-                        pos,
-                        new StructurePlacementData()
-                                .setMirror(BlockMirror.NONE)
-                                .setRotation(BlockRotation.NONE)
-                                .setIgnoreEntities(false),
-                        world.getRandom(),
-                        Block.NOTIFY_LISTENERS | Block.FORCE_STATE
-                );
-
-                System.out.println("Immediately placed pocket island structure in new dimension: " + dimensionName);
+        if (!exists) {
+            if (PocketRepose.getSpawnIsland()) {
+                placeStructureImmediately(server, handle.asWorld(), dimensionName);
+                PocketRepose.LOGGER.info("Created new pocket dimension {} with island structure", dimensionName);
             } else {
-                System.err.println("Could not find structure template: pocket_island_01");
+                placeGrassCube(handle.asWorld());
+                PocketRepose.LOGGER.info("Created new pocket dimension {} with grass cube", dimensionName);
             }
-        } catch (Exception e) {
-            e.printStackTrace();
         }
+        return handle.asWorld();
     }
 
-    private Path getStructureMarkerPath(MinecraftServer server, String dimensionName) {
-        return server.getSavePath(WorldSavePath.ROOT)
-                .resolve("data")
-                .resolve("pocket-repose")
-                .resolve("pending_structures")
-                .resolve(dimensionName + ".txt");
+    private static void placeGrassCube(ServerWorld world) {
+        BlockPos spawnPos = new BlockPos(17, 97, 9);
+
+        for (int x = -1; x <= 1; x++) {
+            for (int y = -1; y <= 1; y++) {
+                for (int z = -1; z <= 1; z++) {
+                    BlockPos grassPos = spawnPos.add(x, y - 2, z);
+                    world.setBlockState(grassPos, Blocks.GRASS_BLOCK.getDefaultState(), Block.NOTIFY_ALL);
+                }
+            }
+        }
+
+        BlockPos portalPos = new BlockPos(17, 100, 9);
+        world.setBlockState(portalPos, net.bennyboops.modid.block.ModBlocks.PORTAL.getDefaultState(), Block.NOTIFY_ALL);
+
+        net.bennyboops.modid.data.MobEntryData mobData = net.bennyboops.modid.data.MobEntryData.get(world);
+        mobData.setEntry(new net.minecraft.util.math.Vec3d(17.5, 97.0, 9.5), 0f, 0f);
+
+        PocketRepose.LOGGER.info("Placed cube, portal, and set mob entry at spawn location");
+    }
+
+    private static void placeStructureImmediately(MinecraftServer server,
+                                           ServerWorld world,
+                                           String dimensionName) {
+        Identifier structureId = new Identifier("pocket-repose", "pocket_island_01");
+
+        PocketRepose.LOGGER.info("Looking for structure: {}", structureId);
+
+        var templateOpt = server.getStructureTemplateManager().getTemplate(structureId);
+
+        if (templateOpt.isEmpty()) {
+            PocketRepose.LOGGER.error("Structure NOT found, attempting direct file load");
+
+            try {
+                String resourcePath = "/data/pocket-repose/structures/pocket_island_01.nbt";
+                var inputStream = KeystoneItem.class.getResourceAsStream(resourcePath);
+
+                if (inputStream != null) {
+                    PocketRepose.LOGGER.info("Found structure in mod resources");
+
+                    NbtCompound nbt = net.minecraft.nbt.NbtIo.readCompressed(inputStream);
+                    StructureTemplate template = new StructureTemplate();
+
+                    var blockLookup = server.getRegistryManager().getWrapperOrThrow(RegistryKeys.BLOCK);
+                    template.readNbt(blockLookup, nbt);
+
+                    BlockPos origin = new BlockPos(0, 64, 0);
+                    world.getChunk(origin);
+
+                    template.place(world, origin, origin,
+                            new StructurePlacementData()
+                                    .setMirror(BlockMirror.NONE)
+                                    .setRotation(BlockRotation.NONE)
+                                    .setIgnoreEntities(false),
+                            world.getRandom(),
+                            Block.NOTIFY_ALL);
+
+                    PocketRepose.LOGGER.info("Structure loaded and placed from mod resources");
+                    inputStream.close();
+                    return;
+                } else {
+                    PocketRepose.LOGGER.error("Structure not found in mod resources at: {}", resourcePath);
+                }
+            } catch (Exception e) {
+                PocketRepose.LOGGER.error("Failed to load structure from mod resources", e);
+            }
+
+            return;
+        }
+
+        StructureTemplate template = templateOpt.get();
+        BlockPos origin = new BlockPos(0, 64, 0);
+        world.getChunk(origin);
+
+        template.place(world, origin, origin,
+                new StructurePlacementData()
+                        .setMirror(BlockMirror.NONE)
+                        .setRotation(BlockRotation.NONE)
+                        .setIgnoreEntities(false),
+                world.getRandom(),
+                Block.NOTIFY_ALL);
+
+        PocketRepose.LOGGER.info("Structure placed successfully");
     }
 
     public static boolean isValidKeystone(ItemStack stack) {
-        String keystoneName = stack.getName().getString().toLowerCase();
-        return stack.hasCustomName() &&
-                !keystoneName.equals("item.pocket-repose.keystone") &&
-                stack.hasEnchantments();
+        String cleanedName = Formatting.strip(stack.getName().getString())
+                .toLowerCase(Locale.ROOT);
+
+        boolean hasCustomName = stack.hasCustomName()
+                || (stack.getFrame() != null
+                && stack.getFrame().hasCustomName());
+
+        boolean isDefault = cleanedName.equals("item.pocket-repose.keystone");
+
+        return hasCustomName && !isDefault && stack.hasEnchantments();
     }
 
     @Override
-    public void appendTooltip(ItemStack stack, @Nullable World world, java.util.List<Text> tooltip, TooltipContext context) {
-        if (!stack.hasCustomName() ||
-                stack.getName().getString().toLowerCase().equals("item.pocket-repose.keystone")) {
-            tooltip.add(Text.literal("§7Rename to bind").formatted(Formatting.ITALIC));
+    public void appendTooltip(ItemStack stack, @Nullable World world,
+                              List<Text> tooltip, TooltipContext context) {
+        boolean hasCustomName = stack.hasCustomName();
+        boolean isDefault     = Formatting.strip(stack.getName().getString())
+                .equalsIgnoreCase("item.pocket-repose.keystone");
+
+        if (!hasCustomName || isDefault) {
+            tooltip.add(Text.literal("Rename to bind")
+                    .formatted(Formatting.GRAY, Formatting.ITALIC));
         }
+
     }
 
     @Override
-    public void inventoryTick(ItemStack stack, World world, Entity entity, int slot, boolean selected) {
-        if (!stack.hasCustomName() ||
-                stack.getName().getString().toLowerCase().equals("item.pocket-repose.keystone")) {
-            NbtCompound nbt = stack.getOrCreateNbt();
-            nbt.putInt("CustomModelData", 1);
-        } else if (stack.getNbt() != null && stack.getNbt().contains("CustomModelData")) {
-            stack.getNbt().remove("CustomModelData");
+    public void inventoryTick(ItemStack stack, World world,
+                              Entity entity, int slot, boolean selected) {
+        ItemFrameEntity frame = stack.getFrame();
+
+        boolean hasCustomName = stack.hasCustomName();
+
+        String displayName = stack.getName().getString();
+        boolean isDefaultName = displayName.equalsIgnoreCase("item.pocket-repose.keystone")
+                || displayName.equalsIgnoreCase("Keystone");
+
+        boolean shouldShowBroken = !hasCustomName || isDefaultName;
+
+        if (frame != null) {
+            shouldShowBroken = !frame.hasCustomName();
+        }
+
+        if (shouldShowBroken) {
+            NbtCompound nbt = stack.getNbt();
+            if (nbt == null || nbt.getInt("CustomModelData") != 1) {
+                stack.getOrCreateNbt().putInt("CustomModelData", 1);
+            }
+        } else {
+            stack.removeSubNbt("CustomModelData");
         }
 
         if (!world.isClient && stack.hasEnchantments()) {
-            NbtCompound nbt = stack.getOrCreateNbt();
-            if (nbt.getInt("RepairCost") < 32767) {
-                nbt.putInt("RepairCost", 32767);
+            int cost = stack.getRepairCost();
+            if (cost < 32_767) {
+                stack.setRepairCost(32_767);
+            }
+
+            int hideEnchantments = ItemStack.TooltipSection.ENCHANTMENTS.getFlag();
+            if ((stack.getOrCreateNbt().getInt("HideFlags") & hideEnchantments) == 0) {
+                stack.addHideFlag(ItemStack.TooltipSection.ENCHANTMENTS);
             }
         }
     }
 
-    private void registerDimension(MinecraftServer server, String dimensionName) {
-        Path registryDir = server.getSavePath(WorldSavePath.ROOT)
-                .resolve("data")
-                .resolve("pocket-repose")
-                .resolve("dimension_registry");
+    @Override
+    public boolean hasGlint(ItemStack stack) {
+        return stack.hasEnchantments();
+    }
+
+    private static void registerDimension(MinecraftServer server,
+                                   String dimensionName) {
+        Path dir = server.getSavePath(WorldSavePath.ROOT)
+                .resolve("data/pocket-repose/dimension_registry");
 
         try {
-            Files.createDirectories(registryDir);
-            Path registryFile = registryDir.resolve("registry.txt");
+            Files.createDirectories(dir);
+            Path file = dir.resolve("registry.txt");
 
-            // load existing lines
-            Set<String> dims = new HashSet<>();
-            if (Files.exists(registryFile)) {
-                dims.addAll(Files.readAllLines(registryFile));
-            }
+            Set<String> lines = Files.exists(file)
+                    ? new HashSet<>(Files.readAllLines(file))
+                    : new HashSet<>();
 
-            // add + save only if new
-            if (dims.add(dimensionName)) {
-                Files.write(registryFile, dims);
+            if (lines.add(dimensionName)) {
+                Files.write(file, lines);
             }
         } catch (IOException e) {
-            PocketRepose.LOGGER.error("Failed to write dimension registry", e);
+            PocketRepose.LOGGER.error("Failed to update dimension registry", e);
         }
     }
 }

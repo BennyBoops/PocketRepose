@@ -7,13 +7,7 @@
       "block_search_extent": 8,
       "offset": 2,
       "sound": "minecraft:ambient.cave",
-      "tick_delay": 6000,
-      "music": {
-        "sound": "minecraft:music.creative",
-        "min_delay": 5000,
-        "max_delay": 6000,
-        "replace_current_music": false
-      }
+      "tick_delay": 6000
     },
     "sky_color": 8103167,
     "water_color": 4159204,

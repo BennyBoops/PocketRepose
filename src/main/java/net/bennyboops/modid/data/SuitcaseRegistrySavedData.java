@@ -15,11 +15,34 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class SuitcaseRegistrySavedData extends PersistentState {
-    public static final String DATA_NAME = "pocket-repose:suitcase_registry";
+
+    public static final String DATA_NAME = "pocket_repose_suitcase_registry";
+
+
     private final Map<String, Map<String, BlockPos>> registry = new HashMap<>();
 
     public SuitcaseRegistrySavedData() {
-        super();
+    }
+
+    private static SuitcaseRegistrySavedData fromNbt(NbtCompound nbt) {
+        SuitcaseRegistrySavedData data = new SuitcaseRegistrySavedData();
+        if (nbt.contains("RegistryEntries", NbtElement.COMPOUND_TYPE)) {
+            NbtCompound top = nbt.getCompound("RegistryEntries");
+            for (String keystone : top.getKeys()) {
+                NbtList playerList = top.getList(keystone, NbtElement.COMPOUND_TYPE);
+                Map<String, BlockPos> playerMap = new HashMap<>();
+                for (int i = 0; i < playerList.size(); i++) {
+                    NbtCompound rec = playerList.getCompound(i);
+                    String uuid = rec.getString("UUID");
+                    int x = rec.getInt("X");
+                    int y = rec.getInt("Y");
+                    int z = rec.getInt("Z");
+                    playerMap.put(uuid, new BlockPos(x, y, z));
+                }
+                data.registry.put(keystone, playerMap);
+            }
+        }
+        return data;
     }
 
     @Override
@@ -45,27 +68,6 @@ public class SuitcaseRegistrySavedData extends PersistentState {
         return nbt;
     }
 
-    public static SuitcaseRegistrySavedData readNbt(NbtCompound nbt) {
-        SuitcaseRegistrySavedData data = new SuitcaseRegistrySavedData();
-        if (nbt.contains("RegistryEntries", NbtElement.COMPOUND_TYPE)) {
-            NbtCompound top = nbt.getCompound("RegistryEntries");
-            for (String keystone : top.getKeys()) {
-                NbtList playerList = top.getList(keystone, NbtElement.COMPOUND_TYPE);
-                Map<String, BlockPos> playerMap = new HashMap<>();
-                for (int i = 0; i < playerList.size(); i++) {
-                    NbtCompound rec = playerList.getCompound(i);
-                    String uuid = rec.getString("UUID");
-                    int x = rec.getInt("X");
-                    int y = rec.getInt("Y");
-                    int z = rec.getInt("Z");
-                    playerMap.put(uuid, new BlockPos(x, y, z));
-                }
-                data.registry.put(keystone, playerMap);
-            }
-        }
-        return data;
-    }
-
     public void syncFromStaticRegistry() {
         registry.clear();
         SuitcaseBlockEntity.saveSuitcaseRegistryTo(registry);
@@ -81,11 +83,7 @@ public class SuitcaseRegistrySavedData extends PersistentState {
         if (overworld == null) return;
 
         PersistentStateManager mgr = overworld.getPersistentStateManager();
-        SuitcaseRegistrySavedData data = mgr.getOrCreate(
-                SuitcaseRegistrySavedData::readNbt,
-                SuitcaseRegistrySavedData::new,
-                DATA_NAME
-        );
+        SuitcaseRegistrySavedData data = mgr.getOrCreate(SuitcaseRegistrySavedData::fromNbt, SuitcaseRegistrySavedData::new, DATA_NAME);
         data.syncToStaticRegistry();
     }
 
@@ -94,11 +92,7 @@ public class SuitcaseRegistrySavedData extends PersistentState {
         if (overworld == null) return;
 
         PersistentStateManager mgr = overworld.getPersistentStateManager();
-        SuitcaseRegistrySavedData data = mgr.getOrCreate(
-                SuitcaseRegistrySavedData::readNbt,
-                SuitcaseRegistrySavedData::new,
-                DATA_NAME
-        );
+        SuitcaseRegistrySavedData data = mgr.getOrCreate(SuitcaseRegistrySavedData::fromNbt, SuitcaseRegistrySavedData::new, DATA_NAME);
         data.syncFromStaticRegistry();
     }
 }

@@ -8,8 +8,8 @@
 		"BennyBoops"
 	],
 	"contact": {
-		"homepage": "https://fabricmc.net/",
-		"sources": "https://github.com/FabricMC/fabric-example-mod"
+		"homepage": "https://modrinth.com/mod/pocket-repose",
+		"sources": "https://github.com/BennyBoops/PocketRepose"
 	},
 	"license": "MIT",
 	"icon": "assets/pocket-repose/icon.png",

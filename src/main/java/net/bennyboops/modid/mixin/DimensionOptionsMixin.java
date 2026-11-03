@@ -7,10 +7,8 @@ import net.bennyboops.modid.world.FantasyDimensionOptions;
 
 @Mixin(DimensionOptions.class)
 public class DimensionOptionsMixin implements FantasyDimensionOptions {
-    @Unique
-    private boolean fantasy$save = true;
-    @Unique
-    private boolean fantasy$saveProperties = true;
+    @Unique private boolean fantasy$save = true;
+    @Unique private boolean fantasy$saveProperties = true;
 
     @Override
     public void fantasy$setSave(boolean value) {
