@@ -3,17 +3,14 @@
   "category": "misc",
   "ingredients": [
     {
-      "item": "minecraft:slime_ball"
-    },
-    {
-      "item": "minecraft:barrel"
+      "item": "minecraft:black_dye"
     },
     {
       "tag": "pocket-repose:suitcases"
     }
   ],
   "result": {
-    "id": "pocket-repose:secret_barrel",
+    "item": "pocket-repose:black_suitcase",
     "count": 1
   }
 }

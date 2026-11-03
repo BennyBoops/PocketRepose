@@ -2,19 +2,18 @@ package net.bennyboops.modid.item;
 
 import net.bennyboops.modid.PocketRepose;
 import net.bennyboops.modid.block.ModBlocks;
-import net.fabricmc.fabric.api.itemgroup.v1.FabricItemGroup;
 import net.minecraft.block.Blocks;
 import net.minecraft.item.ItemGroup;
 import net.minecraft.item.ItemStack;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.Registry;
+import net.minecraftforge.registries.RegisterEvent;
 import net.minecraft.text.Text;
 import net.minecraft.util.Identifier;
 
 public class ModItemGroups {
-    public static final ItemGroup POCKET_GROUP = Registry.register(Registries.ITEM_GROUP,
-            Identifier.of(PocketRepose.MOD_ID, "pocket"),
-            FabricItemGroup.builder().displayName(Text.translatable("itemgroup.pocket"))
+    public static ItemGroup POCKET_GROUP;
+
+    public static void registerItemGroups(RegisterEvent.RegisterHelper<ItemGroup> helper) {
+        POCKET_GROUP = ItemGroup.builder().displayName(Text.translatable("itemgroup.pocket"))
                     .icon(() -> new ItemStack(ModItems.KEYSTONE)).entries((displayContext, entries) -> {
 
                         entries.add(ModItems.KEYSTONE);
@@ -42,8 +41,7 @@ public class ModItemGroups {
 
                         entries.add(Blocks.ANVIL);
 
-                    }).build());
-    public static void registerItemGroups() {
-        PocketRepose.LOGGER.info("Registering item groups for" + PocketRepose.MOD_ID);
+                    }).build();
+        helper.register(new Identifier(PocketRepose.MOD_ID, "pocket"), POCKET_GROUP);
     }
 }

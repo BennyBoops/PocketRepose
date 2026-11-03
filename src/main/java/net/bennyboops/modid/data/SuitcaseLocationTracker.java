@@ -1,10 +1,8 @@
 package net.bennyboops.modid.data;
 
-import net.minecraft.datafixer.DataFixTypes;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtList;
-import net.minecraft.registry.RegistryWrapper;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
@@ -20,11 +18,6 @@ public class SuitcaseLocationTracker extends PersistentState {
 
     public static final String DATA_NAME = "pocket_repose_suitcase_locations";
 
-    public static final Type<SuitcaseLocationTracker> TYPE = new Type<>(
-            SuitcaseLocationTracker::new,
-            SuitcaseLocationTracker::fromNbt,
-            DataFixTypes.LEVEL
-    );
 
     private final Map<String, Map<String, LocationData>> locations = new HashMap<>();
     private final Map<String, Map<String, LocationData>> entryLocations = new HashMap<>();
@@ -130,7 +123,7 @@ public class SuitcaseLocationTracker extends PersistentState {
 
     public SuitcaseLocationTracker() {}
 
-    private static SuitcaseLocationTracker fromNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup lookup) {
+    private static SuitcaseLocationTracker fromNbt(NbtCompound nbt) {
         SuitcaseLocationTracker tracker = new SuitcaseLocationTracker();
 
         if (nbt.contains("Locations", NbtElement.COMPOUND_TYPE)) {
@@ -185,7 +178,7 @@ public class SuitcaseLocationTracker extends PersistentState {
     }
 
     @Override
-    public NbtCompound writeNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup lookup) {
+    public NbtCompound writeNbt(NbtCompound nbt) {
         NbtCompound locTop = new NbtCompound();
         for (var e : locations.entrySet()) {
             NbtList list = new NbtList();
@@ -235,7 +228,7 @@ public class SuitcaseLocationTracker extends PersistentState {
         ServerWorld overworld = server.getWorld(World.OVERWORLD);
         if (overworld == null) return null;
         PersistentStateManager mgr = overworld.getPersistentStateManager();
-        return mgr.getOrCreate(TYPE, DATA_NAME);
+        return mgr.getOrCreate(SuitcaseLocationTracker::fromNbt, SuitcaseLocationTracker::new, DATA_NAME);
     }
 
 

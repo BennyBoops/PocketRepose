@@ -3,14 +3,14 @@
   "category": "misc",
   "ingredients": [
     {
-      "item": "minecraft:orange_dye"
+      "item": "minecraft:lime_dye"
     },
     {
       "tag": "pocket-repose:suitcases"
     }
   ],
   "result": {
-    "id": "pocket-repose:orange_suitcase",
+    "item": "pocket-repose:lime_suitcase",
     "count": 1
   }
 }
