@@ -3,8 +3,9 @@ package net.bennyboops.modid.world;
 import com.google.common.base.Preconditions;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import net.bennyboops.modid.mixin.MinecraftServerAccess;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.MinecraftServer;
@@ -37,7 +38,7 @@ import java.util.Set;
 public final class Fantasy {
     public static final Logger LOGGER = LogManager.getLogger(Fantasy.class);
     public static final String ID = "fantasy";
-    public static final RegistryKey<DimensionType> DEFAULT_DIM_TYPE = RegistryKey.of(RegistryKeys.DIMENSION_TYPE, Identifier.of(Fantasy.ID, "default"));
+    public static final RegistryKey<DimensionType> DEFAULT_DIM_TYPE = RegistryKey.of(RegistryKeys.DIMENSION_TYPE, new Identifier(Fantasy.ID, "default"));
 
     private static Fantasy instance;
 
@@ -50,13 +51,14 @@ public final class Fantasy {
     private final Set<ServerWorld> unloadingQueue = new ReferenceOpenHashSet<>();
 
     static {
-        ServerTickEvents.START_SERVER_TICK.register(server -> {
-            Fantasy fantasy = get(server);
+        MinecraftForge.EVENT_BUS.addListener((TickEvent.ServerTickEvent event) -> {
+            if (event.phase != TickEvent.Phase.START) return;
+            Fantasy fantasy = get(event.getServer());
             fantasy.tick();
         });
 
-        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
-            Fantasy fantasy = get(server);
+        MinecraftForge.EVENT_BUS.addListener((ServerStoppingEvent event) -> {
+            Fantasy fantasy = get(event.getServer());
             fantasy.onServerStopping();
         });
     }
@@ -249,6 +251,6 @@ public final class Fantasy {
 
     private static Identifier generateTemporaryWorldKey() {
         String key = RandomStringUtils.random(16, "abcdefghijklmnopqrstuvwxyz0123456789");
-        return Identifier.of(Fantasy.ID, key);
+        return new Identifier(Fantasy.ID, key);
     }
 }

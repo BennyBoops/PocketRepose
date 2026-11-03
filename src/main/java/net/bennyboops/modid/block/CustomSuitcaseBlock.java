@@ -1,6 +1,5 @@
 package net.bennyboops.modid.block;
 
-import com.mojang.serialization.MapCodec;
 import net.minecraft.block.BlockState;
 import net.minecraft.block.BlockWithEntity;
 import net.minecraft.block.ShapeContext;
@@ -16,8 +15,6 @@ import net.minecraft.world.BlockView;
 import net.minecraft.world.World;
 
 public class CustomSuitcaseBlock extends SuitcaseBlock {
-    public static final MapCodec<CustomSuitcaseBlock> CODEC = createCodec(CustomSuitcaseBlock::new);
-
     protected final VoxelShape customShapeN;
     protected final VoxelShape customShapeS;
     protected final VoxelShape customShapeE;
@@ -42,11 +39,6 @@ public class CustomSuitcaseBlock extends SuitcaseBlock {
                 createCuboidShape(0, 0, 0, 16, 15, 16),
                 net.minecraft.sound.SoundEvents.BLOCK_BARREL_OPEN,
                 net.minecraft.sound.SoundEvents.BLOCK_BARREL_CLOSE);
-    }
-
-    @Override
-    protected MapCodec<? extends BlockWithEntity> getCodec() {
-        return CODEC;
     }
 
     @Override

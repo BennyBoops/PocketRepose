@@ -1,11 +1,9 @@
 package net.bennyboops.modid.data;
 
 import net.bennyboops.modid.block.entity.SuitcaseBlockEntity;
-import net.minecraft.datafixer.DataFixTypes;
 import net.minecraft.nbt.NbtCompound;
 import net.minecraft.nbt.NbtElement;
 import net.minecraft.nbt.NbtList;
-import net.minecraft.registry.RegistryWrapper;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.world.PersistentStateManager;
@@ -20,17 +18,13 @@ public class SuitcaseRegistrySavedData extends PersistentState {
 
     public static final String DATA_NAME = "pocket_repose_suitcase_registry";
 
-    public static final Type<SuitcaseRegistrySavedData> TYPE = new Type<>(
-            SuitcaseRegistrySavedData::new,
-            SuitcaseRegistrySavedData::fromNbt,
-            DataFixTypes.LEVEL);
 
     private final Map<String, Map<String, BlockPos>> registry = new HashMap<>();
 
     public SuitcaseRegistrySavedData() {
     }
 
-    private static SuitcaseRegistrySavedData fromNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup lookup) {
+    private static SuitcaseRegistrySavedData fromNbt(NbtCompound nbt) {
         SuitcaseRegistrySavedData data = new SuitcaseRegistrySavedData();
         if (nbt.contains("RegistryEntries", NbtElement.COMPOUND_TYPE)) {
             NbtCompound top = nbt.getCompound("RegistryEntries");
@@ -52,7 +46,7 @@ public class SuitcaseRegistrySavedData extends PersistentState {
     }
 
     @Override
-    public NbtCompound writeNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup lookup) {
+    public NbtCompound writeNbt(NbtCompound nbt) {
         NbtCompound top = new NbtCompound();
         for (Map.Entry<String, Map<String, BlockPos>> entry : registry.entrySet()) {
             String keystone = entry.getKey();
@@ -89,7 +83,7 @@ public class SuitcaseRegistrySavedData extends PersistentState {
         if (overworld == null) return;
 
         PersistentStateManager mgr = overworld.getPersistentStateManager();
-        SuitcaseRegistrySavedData data = mgr.getOrCreate(TYPE, DATA_NAME);
+        SuitcaseRegistrySavedData data = mgr.getOrCreate(SuitcaseRegistrySavedData::fromNbt, SuitcaseRegistrySavedData::new, DATA_NAME);
         data.syncToStaticRegistry();
     }
 
@@ -98,7 +92,7 @@ public class SuitcaseRegistrySavedData extends PersistentState {
         if (overworld == null) return;
 
         PersistentStateManager mgr = overworld.getPersistentStateManager();
-        SuitcaseRegistrySavedData data = mgr.getOrCreate(TYPE, DATA_NAME);
+        SuitcaseRegistrySavedData data = mgr.getOrCreate(SuitcaseRegistrySavedData::fromNbt, SuitcaseRegistrySavedData::new, DATA_NAME);
         data.syncFromStaticRegistry();
     }
 }

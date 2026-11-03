@@ -1,25 +1,27 @@
 package net.bennyboops.modid.criterion;
 
 import com.google.gson.JsonObject;
-import com.mojang.serialization.Codec;
 import net.minecraft.advancement.criterion.AbstractCriterion;
+import net.minecraft.advancement.criterion.AbstractCriterionConditions;
+import net.minecraft.predicate.entity.AdvancementEntityPredicateDeserializer;
 import net.minecraft.predicate.entity.LootContextPredicate;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
 
-import java.util.Optional;
-
 public class EnterPocketDimensionCriterion
         extends AbstractCriterion<EnterPocketDimensionCriterion.Conditions> {
 
-    public static final Identifier ID = Identifier.of("pocket-repose", "enter_pocket_dimension");
+    public static final Identifier ID = new Identifier("pocket-repose", "enter_pocket_dimension");
 
 
+    @Override
     public Identifier getId() {
         return ID;
     }
 
-    protected Conditions conditionsFromJson(JsonObject json, LootContextPredicate playerPredicate) {
+    @Override
+    protected Conditions conditionsFromJson(JsonObject json, LootContextPredicate playerPredicate,
+                                            AdvancementEntityPredicateDeserializer predicateDeserializer) {
         return new Conditions(playerPredicate);
     }
 
@@ -27,20 +29,9 @@ public class EnterPocketDimensionCriterion
         this.trigger(player, c -> true);
     }
 
-    @Override
-    public Codec<Conditions> getConditionsCodec() {
-        return null;
-    }
-
-    public static class Conditions implements AbstractCriterion.Conditions {
+    public static class Conditions extends AbstractCriterionConditions {
         public Conditions(LootContextPredicate playerPredicate) {
-            super();
+            super(ID, playerPredicate);
         }
-
-        @Override
-        public Optional<LootContextPredicate> player() {
-            return Optional.empty();
-        }
-
     }
 }

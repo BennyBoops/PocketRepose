@@ -10,7 +10,6 @@ import net.minecraft.nbt.NbtList;
 import net.minecraft.network.listener.ClientPlayPacketListener;
 import net.minecraft.network.packet.Packet;
 import net.minecraft.network.packet.s2c.play.BlockEntityUpdateS2CPacket;
-import net.minecraft.registry.RegistryWrapper;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.math.BlockPos;
@@ -94,12 +93,6 @@ public class SuitcaseBlockEntity extends BlockEntity {
         return dimensionLocked;
     }
 
-    private static final Set<UUID> PLAYERS_WHO_ENTERED = new HashSet<>();
-
-    public boolean isFirstTimeEntering(ServerPlayerEntity player) {
-        return !PLAYERS_WHO_ENTERED.contains(player.getUuid());
-    }
-
     public void playerEntered(ServerPlayerEntity player) {
         enteredPlayers.removeIf(data -> data.uuid.equals(player.getUuidAsString()));
 
@@ -110,8 +103,6 @@ public class SuitcaseBlockEntity extends BlockEntity {
                 this.getPos()
         );
         enteredPlayers.add(data);
-
-        PLAYERS_WHO_ENTERED.add(player.getUuid());
 
         Map<String, BlockPos> suitcases = SUITCASE_REGISTRY.computeIfAbsent(
                 boundKeystoneName, k -> new HashMap<>()
@@ -185,7 +176,7 @@ public class SuitcaseBlockEntity extends BlockEntity {
     }
 
     @Override
-    protected void writeNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup registry) {
+    protected void writeNbt(NbtCompound nbt) {
         nbt.putUuid(NBT_SUITCASE_ID, suitcaseId);
 
         if (boundKeystoneName != null) nbt.putString("BoundKeystone", boundKeystoneName);
@@ -197,12 +188,12 @@ public class SuitcaseBlockEntity extends BlockEntity {
         for (EnteredPlayerData data : enteredPlayers) players.add(data.toNbt());
         nbt.put("EnteredPlayers", players);
 
-        super.writeNbt(nbt, registry);
+        super.writeNbt(nbt);
     }
 
     @Override
-    public void readNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup registry) {
-        super.readNbt(nbt, registry);
+    public void readNbt(NbtCompound nbt) {
+        super.readNbt(nbt);
 
         if (nbt.containsUuid(NBT_SUITCASE_ID)) {
             suitcaseId = nbt.getUuid(NBT_SUITCASE_ID);
@@ -223,13 +214,13 @@ public class SuitcaseBlockEntity extends BlockEntity {
     }
 
     @Nullable
-    public Packet<ClientPlayPacketListener> toUpdatePacket(RegistryWrapper.WrapperLookup registry) {
+    public Packet<ClientPlayPacketListener> toUpdatePacket() {
         return BlockEntityUpdateS2CPacket.create(this);
     }
 
     @Override
-    public NbtCompound toInitialChunkDataNbt(RegistryWrapper.WrapperLookup registry) {
-        return createNbtWithId(registry);
+    public NbtCompound toInitialChunkDataNbt() {
+        return createNbtWithId();
     }
 
     public static final Map<String, Map<String, BlockPos>> SUITCASE_REGISTRY =

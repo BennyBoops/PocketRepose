@@ -2,23 +2,23 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "pattern": [
-    "GNG",
-    "NTN",
-    "GNG"
+    "GGG",
+    "GCG",
+    "LLL"
   ],
   "key": {
-    "N": {
-      "item": "minecraft:netherite_scrap"
+    "L": {
+      "item": "minecraft:leather"
     },
     "G": {
       "item": "minecraft:gold_ingot"
     },
-    "T": {
-      "item": "minecraft:tripwire_hook"
+    "C": {
+      "item": "minecraft:ender_chest"
     }
   },
   "result": {
-    "id": "pocket-repose:keystone",
+    "item": "pocket-repose:suitcase",
     "count": 1
   }
 }

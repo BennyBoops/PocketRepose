@@ -1,7 +1,6 @@
 package net.bennyboops.modid.mixin;
 
 import net.bennyboops.modid.item.KeystoneItem;
-import net.minecraft.component.type.ItemEnchantmentsComponent;
 import net.minecraft.enchantment.EnchantmentHelper;
 import net.minecraft.item.ItemStack;
 import net.minecraft.screen.AnvilScreenHandler;
@@ -23,7 +22,7 @@ public abstract class AnvilScreenHandlerMixin {
         ItemStack result     = outputSlot.getStack();
 
         if (result.getItem() instanceof KeystoneItem) {
-            EnchantmentHelper.set(result, ItemEnchantmentsComponent.DEFAULT);
+            EnchantmentHelper.set(Collections.emptyMap(), result);
         }
     }
 }
