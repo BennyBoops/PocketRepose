@@ -31,6 +31,7 @@ public final class RuntimeWorldConfig {
     private final GameRuleStore gameRules = new GameRuleStore();
     private boolean mirrorOverworldGameRules = false;
     private boolean mirrorOverworldDifficulty = false;
+    private boolean mirrorOverworldTimeAndWeather = false;
     private RuntimeWorld.Constructor worldConstructor = RuntimeWorld::new;
 
     private int sunnyTime = Integer.MAX_VALUE;
@@ -217,6 +218,18 @@ public final class RuntimeWorldConfig {
     }
 
     /**
+     * Defines if the world should follow the overworld time of day and weather (like the vanilla nether/end do)
+     *
+     * @param mirror Whenever it should mirror or not
+     *
+     * @return The same instance of RuntimeWorldConfig
+     */
+    public RuntimeWorldConfig setMirrorOverworldTimeAndWeather(boolean mirror) {
+        this.mirrorOverworldTimeAndWeather = mirror;
+        return this;
+    }
+
+    /**
      * Modifies the weather to sunny
      *
      * @param sunnyTime For how many ticks it should be sunny
@@ -377,6 +390,10 @@ public final class RuntimeWorldConfig {
 
     public boolean shouldMirrorOverworldDifficulty() {
         return this.mirrorOverworldDifficulty;
+    }
+
+    public boolean shouldMirrorOverworldTimeAndWeather() {
+        return this.mirrorOverworldTimeAndWeather;
     }
 
     public int getSunnyTime() {

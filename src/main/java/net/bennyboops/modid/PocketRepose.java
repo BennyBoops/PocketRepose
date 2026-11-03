@@ -5,12 +5,14 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import net.bennyboops.modid.block.ModBlocks;
+import net.bennyboops.modid.block.PocketTravelHandler;
 import net.bennyboops.modid.block.SuitcaseBlock;
 import net.bennyboops.modid.block.entity.ModBlockEntities;
 import net.bennyboops.modid.block.entity.SuitcaseBlockEntity;
 import net.bennyboops.modid.criterion.EnterPocketDimensionCriterion;
 import net.bennyboops.modid.data.MobEntryData;
 import net.bennyboops.modid.data.PlayerEntryData;
+import net.bennyboops.modid.data.PocketReposeSettingsData;
 import net.bennyboops.modid.data.SuitcaseLocationTracker;
 import net.bennyboops.modid.data.SuitcaseRegistrySavedData;
 import net.bennyboops.modid.item.KeystoneItem;
@@ -32,7 +34,7 @@ import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.ContainerComponent;
+import net.bennyboops.modid.util.StackData;
 import net.minecraft.component.type.NbtComponent;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.ItemEntity;
@@ -108,6 +110,7 @@ public class PocketRepose implements ModInitializer {
 
 		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
 			SuitcaseRegistrySavedData.onServerStart(server);
+			PocketReposeSettingsData.onServerStart(server);
 		});
 
 		ModItems.registerModItems();
@@ -116,6 +119,7 @@ public class PocketRepose implements ModInitializer {
 		ModBlockEntities.registerBlockEntities();
 
 		PortalChunkHandler.initialize();
+		PocketTravelHandler.initialize();
 
 		registerPocketCommands();
 		registerSuitcaseMobTeleport();
@@ -132,20 +136,11 @@ public class PocketRepose implements ModInitializer {
 
 			if (!Files.exists(registryFile)) return;
 
-			Registry<Biome> biomeRegistry = server.getRegistryManager().get(RegistryKeys.BIOME);
-			long seed = server.getOverworld().getSeed();
-
 			try {
 				for (String dimName : Files.readAllLines(registryFile)) {
-					Identifier worldId = Identifier.of("pocket-repose", dimName);
-					ChunkGenerator gen = new PortalChunkGenerator(biomeRegistry);
-
-					RuntimeWorldConfig cfg = new RuntimeWorldConfig()
-							.setDimensionType(POCKET_DIMENSION_TYPE_KEY)
-							.setGenerator(gen)
-							.setSeed(seed);
-
-					Fantasy.get(server).getOrOpenPersistentWorld(worldId, cfg);
+					if (dimName.isBlank()) continue;
+					Identifier worldId = Identifier.of("pocket-repose", dimName.trim());
+					Fantasy.get(server).getOrOpenPersistentWorld(worldId, createPocketWorldConfig(server));
 				}
 			} catch (IOException e) {
 				LOGGER.error("Failed to reload pocket dimensions", e);
@@ -252,7 +247,7 @@ public class PocketRepose implements ModInitializer {
 
 								if (st.getItem() instanceof BlockItem b && b.getBlock() instanceof SuitcaseBlock) return true;
 
-								return st.get(DataComponentTypes.CONTAINER) != null;
+								return StackData.hasContainedStacks(st);
 							}
 					);
 
@@ -305,10 +300,7 @@ public class PocketRepose implements ModInitializer {
 
 		updateSuitcaseLocationFromItem(tracker, stack, dimStr, x, y, z, yaw, pitch);
 
-		ContainerComponent container = stack.get(DataComponentTypes.CONTAINER);
-		if (container == null) return;
-
-		for (ItemStack inner : container.iterateNonEmpty()) {
+		for (ItemStack inner : StackData.getContainedStacks(stack)) {
 			scanStackRecursivelyForSuitcases(tracker, inner, dimStr, x, y, z, yaw, pitch, depth - 1);
 		}
 	}
@@ -481,6 +473,22 @@ public class PocketRepose implements ModInitializer {
 			}
 		}
 	}
+	/**
+	 * Builds the config used for every pocket dimension. Game rules, difficulty, time and weather are
+	 * mirrored from the overworld so that /gamerule and /difficulty apply inside pocket dimensions too,
+	 * and a freshly created pocket dimension behaves the same as one reloaded after a restart.
+	 */
+	public static RuntimeWorldConfig createPocketWorldConfig(MinecraftServer server) {
+		Registry<Biome> biomeRegistry = server.getRegistryManager().get(RegistryKeys.BIOME);
+		return new RuntimeWorldConfig()
+				.setDimensionType(POCKET_DIMENSION_TYPE_KEY)
+				.setGenerator(new PortalChunkGenerator(biomeRegistry))
+				.setSeed(server.getOverworld().getSeed())
+				.setShouldTickTime(false)
+				.setMirrorOverworldGameRules(true)
+				.setMirrorOverworldDifficulty(true)
+				.setMirrorOverworldTimeAndWeather(true);
+	}
 	public static final RegistryKey<Biome> VOID_BIOME_KEY =
 			RegistryKey.of(RegistryKeys.BIOME, Identifier.of("pocket-repose", "pocket_islands"));
 	private void registerPocketCommands() {
@@ -500,8 +508,8 @@ public class PocketRepose implements ModInitializer {
 											return 0;
 										}
 										Vec3d pos = src.getPosition();
-										float yaw = src.getEntity().getYaw();
-										float pitch = src.getEntity().getPitch();
+										float yaw = src.getRotation().y;
+										float pitch = src.getRotation().x;
 
 										MobEntryData.get(world).setEntry(pos, yaw, pitch);
 										src.sendFeedback(() -> Text.literal(
@@ -523,8 +531,8 @@ public class PocketRepose implements ModInitializer {
 											return 0;
 										}
 										Vec3d pos = src.getPosition();
-										float yaw = src.getEntity().getYaw();
-										float pitch = src.getEntity().getPitch();
+										float yaw = src.getRotation().y;
+										float pitch = src.getRotation().x;
 
 										PlayerEntryData.get(world).setEntry(pos, yaw, pitch);
 										src.sendFeedback(() -> Text.literal(
@@ -536,6 +544,7 @@ public class PocketRepose implements ModInitializer {
 
 							// reset entry helper (kept from your original)
 							.then(CommandManager.literal("resetPlayerEntry")
+									.requires(src -> src.hasPermissionLevel(2))
 									.then(CommandManager.argument("dimension", StringArgumentType.word())
 											.executes(ctx -> resetPocketDimension(ctx, StringArgumentType.getString(ctx, "dimension")))
 									)
@@ -575,6 +584,7 @@ public class PocketRepose implements ModInitializer {
 												boolean value = BoolArgumentType.getBool(ctx, "value");
 												setCanCaptureHostile(value);
 												ServerCommandSource src = ctx.getSource();
+												PocketReposeSettingsData.onSettingsChanged(src.getServer());
 												src.sendFeedback(() -> Text.literal(
 														value ? "§aHostile mob capture enabled" : "§cHostile mob capture disabled"
 												), false);
@@ -599,6 +609,7 @@ public class PocketRepose implements ModInitializer {
 												boolean value = BoolArgumentType.getBool(ctx, "value");
 												setSpawnIsland(value);
 												ServerCommandSource src = ctx.getSource();
+												PocketReposeSettingsData.onSettingsChanged(src.getServer());
 												src.sendFeedback(() -> Text.literal(
 														value ? "§aIsland structure spawning enabled" : "§cIsland structure spawning disabled (grass cube will spawn)"
 												), false);
@@ -627,12 +638,13 @@ public class PocketRepose implements ModInitializer {
 
 														try {
 															Identifier entityId = Identifier.of(entityString);
-															EntityType<?> entityType = Registries.ENTITY_TYPE.get(entityId);
+															Optional<EntityType<?>> found = Registries.ENTITY_TYPE.getOrEmpty(entityId);
 
-															if (entityType == EntityType.PIG && !entityString.equals("minecraft:pig")) {
+															if (found.isEmpty()) {
 																src.sendError(Text.literal("§cUnknown entity type: " + entityString));
 																return 0;
 															}
+															EntityType<?> entityType = found.get();
 
 															if (entityType == EntityType.PLAYER) {
 																src.sendError(Text.literal("§cCannot blacklist players"));
@@ -640,6 +652,7 @@ public class PocketRepose implements ModInitializer {
 															}
 
 															addToBlacklist(entityType);
+															PocketReposeSettingsData.onSettingsChanged(src.getServer());
 															src.sendFeedback(() -> Text.literal(
 																	"§aAdded " + entityId + " to blacklist"
 															), false);
@@ -660,14 +673,16 @@ public class PocketRepose implements ModInitializer {
 
 														try {
 															Identifier entityId = Identifier.of(entityString);
-															EntityType<?> entityType = Registries.ENTITY_TYPE.get(entityId);
+															Optional<EntityType<?>> found = Registries.ENTITY_TYPE.getOrEmpty(entityId);
 
-															if (entityType == EntityType.PIG && !entityString.equals("minecraft:pig")) {
+															if (found.isEmpty()) {
 																src.sendError(Text.literal("§cUnknown entity type: " + entityString));
 																return 0;
 															}
+															EntityType<?> entityType = found.get();
 
 															boolean removed = removeFromBlacklist(entityType);
+															PocketReposeSettingsData.onSettingsChanged(src.getServer());
 															if (removed) {
 																src.sendFeedback(() -> Text.literal(
 																		"§aRemoved " + entityId + " from blacklist"
@@ -709,6 +724,7 @@ public class PocketRepose implements ModInitializer {
 												ServerCommandSource src = ctx.getSource();
 												int count = getEntityBlacklist().size();
 												clearBlacklist();
+												PocketReposeSettingsData.onSettingsChanged(src.getServer());
 												src.sendFeedback(() -> Text.literal(
 														"§aCleared blacklist (removed " + count + " entities)"
 												), false);
@@ -726,6 +742,7 @@ public class PocketRepose implements ModInitializer {
 												setAllowRecursion(value);
 
 												ServerCommandSource src = ctx.getSource();
+												PocketReposeSettingsData.onSettingsChanged(src.getServer());
 												src.sendFeedback(() -> Text.literal(
 														value ? "§aSuitcase recursion enabled" : "§cSuitcase recursion disabled"
 												), false);
@@ -863,6 +880,12 @@ public class PocketRepose implements ModInitializer {
 		return entityBlacklist.contains(entityType);
 	}
 	public static void clearBlacklist() {
+		entityBlacklist.clear();
+	}
+	public static void resetSettings() {
+		canCaptureHostile = false;
+		spawnIsland = true;
+		allowRecursion = true;
 		entityBlacklist.clear();
 	}
 	private boolean isHostileMob(LivingEntity mob) {
@@ -1087,7 +1110,6 @@ public class PocketRepose implements ModInitializer {
 					ServerWorld target = worldFromId(server, loc.dimensionId);
 					if (target != null) {
 						Vec3d dest = new Vec3d(loc.x, loc.y, loc.z);
-						sp.sendMessage(Text.literal("§6No suitcase found — returning mob to last known point"), true);
 						if (teleportMobTo(mob, target, dest)) {
 							teleported = true;
 							targetWorldUsed = target;

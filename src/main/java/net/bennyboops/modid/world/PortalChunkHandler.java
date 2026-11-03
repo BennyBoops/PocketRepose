@@ -3,13 +3,14 @@ package net.bennyboops.modid.world;
 import net.bennyboops.modid.block.ModBlocks;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerChunkEvents;
 import net.minecraft.block.BlockState;
+import net.minecraft.block.Blocks;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.world.chunk.WorldChunk;
 
 public class PortalChunkHandler {
-    private static final BlockState PORTAL_STATE = ModBlocks.PORTAL.getDefaultState();
+    private static final BlockState AIR_STATE = Blocks.AIR.getDefaultState();
 
     public static void initialize() {
         ServerChunkEvents.CHUNK_LOAD.register(PortalChunkHandler::onChunkLoad);
@@ -23,25 +24,25 @@ public class PortalChunkHandler {
             return;
         }
 
-        // Only fix portals if they're missing (loaded from old save)
+        // Older versions generated a floor of portal blocks at the bottom of every pocket dimension
+        // chunk. The floor isn't needed anymore (falling out of the world exits the pocket), so remove it.
         ChunkPos chunkPos = chunk.getPos();
-        BlockPos testPos = new BlockPos((chunkPos.x << 4), -64, (chunkPos.z << 4));
+        int bottomY = world.getBottomY();
+        BlockPos testPos = new BlockPos(chunkPos.getStartX(), bottomY, chunkPos.getStartZ());
 
-        // Quick test - if first portal exists, assume rest are fine
-        if (chunk.getBlockState(testPos).isOf(ModBlocks.PORTAL)) {
+        // Quick test - the old floor filled the whole layer, so if the corner isn't a portal there's no floor
+        if (!chunk.getBlockState(testPos).isOf(ModBlocks.PORTAL)) {
             return;
         }
 
-        // Portals missing - place them directly in the chunk (fast, no world access)
-        for (int dy = -64; dy <= -61; dy++) {
+        BlockPos.Mutable blockPos = new BlockPos.Mutable();
+        for (int dy = bottomY; dy <= bottomY + 3; dy++) {
             for (int dx = 0; dx < 16; dx++) {
                 for (int dz = 0; dz < 16; dz++) {
-                    int worldX = (chunkPos.x << 4) + dx;
-                    int worldZ = (chunkPos.z << 4) + dz;
-                    BlockPos blockPos = new BlockPos(worldX, dy, worldZ);
-
-                    // Set directly in chunk - no block updates, very fast
-                    chunk.setBlockState(blockPos, PORTAL_STATE, false);
+                    blockPos.set(chunkPos.getStartX() + dx, dy, chunkPos.getStartZ() + dz);
+                    if (chunk.getBlockState(blockPos).isOf(ModBlocks.PORTAL)) {
+                        chunk.setBlockState(blockPos, AIR_STATE, false);
+                    }
                 }
             }
         }

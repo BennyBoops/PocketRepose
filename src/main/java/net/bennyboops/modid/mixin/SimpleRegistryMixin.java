@@ -50,7 +50,7 @@ public abstract class SimpleRegistryMixin<T> implements RemoveFromRegistry<T>, M
             this.idToEntry.remove(registryEntry.registryKey().getValue());
             this.valueToEntry.remove(entry);
             this.rawIdToEntry.set(rawId, null);
-            this.keyToEntryInfo.remove(this.key);
+            this.keyToEntryInfo.remove(registryEntry.registryKey());
 
             return true;
         } catch (Throwable e) {
