@@ -10,7 +10,7 @@ public class ModItems {
     public static final Item KEYSTONE = registerItem("keystone", new KeystoneItem(new Item.Settings()));
 
     private static Item registerItem(String name, Item item) {
-        return Registry.register(Registries.ITEM, Identifier.of(PocketRepose.MOD_ID, name), item);
+        return Registry.register(Registries.ITEM, new Identifier(PocketRepose.MOD_ID, name), item);
     }
 
     public static void registerModItems() {

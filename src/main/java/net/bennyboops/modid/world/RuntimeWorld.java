@@ -16,7 +16,7 @@ import net.minecraft.world.biome.source.BiomeAccess;
 import net.minecraft.world.dimension.DimensionOptions;
 import net.minecraft.world.level.ServerWorldProperties;
 import net.minecraft.world.level.storage.LevelStorage;
-import net.minecraft.world.spawner.SpecialSpawner;
+import net.minecraft.world.spawner.Spawner;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -42,12 +42,14 @@ public class RuntimeWorld extends ServerWorld {
         );
         this.style = style;
         this.flat = config.isFlat().orElse(super.isFlat());
+        this.shouldTickTime = config.shouldTickTime();
     }
 
 
-    protected RuntimeWorld(MinecraftServer server, Executor workerExecutor, LevelStorage.Session session, ServerWorldProperties properties, RegistryKey<World> worldKey, DimensionOptions dimensionOptions, WorldGenerationProgressListener worldGenerationProgressListener, boolean debugWorld, long seed, List<SpecialSpawner> spawners, boolean shouldTickTime, @Nullable RandomSequencesState randomSequencesState, Style style) {
+    protected RuntimeWorld(MinecraftServer server, Executor workerExecutor, LevelStorage.Session session, ServerWorldProperties properties, RegistryKey<World> worldKey, DimensionOptions dimensionOptions, WorldGenerationProgressListener worldGenerationProgressListener, boolean debugWorld, long seed, List<Spawner> spawners, boolean shouldTickTime, @Nullable RandomSequencesState randomSequencesState, Style style) {
         super(server, workerExecutor, session, properties, worldKey, dimensionOptions, worldGenerationProgressListener, debugWorld, seed, spawners, shouldTickTime, randomSequencesState);
         this.style = style;
+        this.shouldTickTime = shouldTickTime;
     }
 
 

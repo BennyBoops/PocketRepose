@@ -12,6 +12,8 @@
 		"ServerWorldMixin",
 		"DimensionOptionsMixin",
 		"SimpleRegistryMixin",
+		"ShapelessRecipeMixin",
+		"ServerPlayNetworkHandlerMixin",
 		"ExampleMixin"
 	],
 	"injectors": {

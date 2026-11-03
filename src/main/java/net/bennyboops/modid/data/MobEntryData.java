@@ -1,8 +1,6 @@
 package net.bennyboops.modid.data;
 
-import net.minecraft.datafixer.DataFixTypes;
 import net.minecraft.nbt.NbtCompound;
-import net.minecraft.registry.RegistryWrapper;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.PersistentState;
@@ -12,11 +10,10 @@ public class MobEntryData extends PersistentState {
 
     private static final String DATA_KEY = "pocket_entry_data";
 
-    public static final Type<MobEntryData> TYPE = new Type<>(MobEntryData::new, MobEntryData::fromNbt, DataFixTypes.LEVEL);
 
     public static MobEntryData get(ServerWorld world) {
         PersistentStateManager mgr = world.getPersistentStateManager();
-        return mgr.getOrCreate(TYPE, DATA_KEY);
+        return mgr.getOrCreate(MobEntryData::fromNbt, MobEntryData::new, DATA_KEY);
     }
 
     private Vec3d entryPos   = Vec3d.ZERO;
@@ -27,7 +24,7 @@ public class MobEntryData extends PersistentState {
         this.entryPos = new Vec3d(35.5, 85, 16.5); // sensible default
     }
 
-    private static MobEntryData fromNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup registryLookup) {
+    private static MobEntryData fromNbt(NbtCompound nbt) {
         MobEntryData data = new MobEntryData();
         data.readNbt(nbt);
         return data;
@@ -40,7 +37,7 @@ public class MobEntryData extends PersistentState {
     }
 
     @Override
-    public NbtCompound writeNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup registryLookup) {
+    public NbtCompound writeNbt(NbtCompound nbt) {
         nbt.putDouble("entryX", entryPos.x);
         nbt.putDouble("entryY", entryPos.y);
         nbt.putDouble("entryZ", entryPos.z);

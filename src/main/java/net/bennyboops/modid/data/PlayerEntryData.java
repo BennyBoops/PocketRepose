@@ -1,8 +1,6 @@
 package net.bennyboops.modid.data;
 
-import net.minecraft.datafixer.DataFixTypes;
 import net.minecraft.nbt.NbtCompound;
-import net.minecraft.registry.RegistryWrapper;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.PersistentState;
@@ -12,11 +10,10 @@ public class PlayerEntryData extends PersistentState {
 
     private static final String DATA_KEY = "pocket_player_entry";
 
-    public static final Type<PlayerEntryData> TYPE = new Type<>(PlayerEntryData::new, PlayerEntryData::fromNbt, DataFixTypes.LEVEL);
 
     public static PlayerEntryData get(ServerWorld world) {
         PersistentStateManager mgr = world.getPersistentStateManager();
-        return mgr.getOrCreate(TYPE, DATA_KEY);
+        return mgr.getOrCreate(PlayerEntryData::fromNbt, PlayerEntryData::new, DATA_KEY);
     }
 
     private Vec3d entryPos   = Vec3d.ZERO;
@@ -27,7 +24,7 @@ public class PlayerEntryData extends PersistentState {
         this.entryPos = new Vec3d(17.5, 97, 9.5); // default spawn
     }
 
-    private static PlayerEntryData fromNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup wrapperLookup) {
+    private static PlayerEntryData fromNbt(NbtCompound nbt) {
         PlayerEntryData data = new PlayerEntryData();
         data.readNbt(nbt);
         return data;
@@ -43,7 +40,7 @@ public class PlayerEntryData extends PersistentState {
     }
 
     @Override
-    public NbtCompound writeNbt(NbtCompound nbt, RegistryWrapper.WrapperLookup wrapperLookup) {
+    public NbtCompound writeNbt(NbtCompound nbt) {
         nbt.putDouble("px",    entryPos.x);
         nbt.putDouble("py",    entryPos.y);
         nbt.putDouble("pz",    entryPos.z);

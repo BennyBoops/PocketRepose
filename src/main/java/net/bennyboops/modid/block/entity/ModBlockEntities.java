@@ -12,7 +12,7 @@ public class ModBlockEntities {
     public static final BlockEntityType<SuitcaseBlockEntity> SUITCASE_BLOCK_ENTITY =
             Registry.register(
                     Registries.BLOCK_ENTITY_TYPE,
-                    Identifier.of(PocketRepose.MOD_ID, "suitcase"),
+                    new Identifier(PocketRepose.MOD_ID, "suitcase"),
                     BlockEntityType.Builder.create(
                             SuitcaseBlockEntity::new,
 
@@ -33,7 +33,7 @@ public class ModBlockEntities {
                             ModBlocks.MAGENTA_SUITCASE,
                             ModBlocks.PINK_SUITCASE,
                             ModBlocks.SECRET_BARREL
-                    ).build()
+                    ).build(null)
             );
 
     public static void registerBlockEntities() {

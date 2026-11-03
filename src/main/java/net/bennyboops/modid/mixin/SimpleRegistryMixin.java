@@ -3,14 +3,14 @@ package net.bennyboops.modid.mixin;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.mojang.logging.LogUtils;
 import it.unimi.dsi.fastutil.objects.ObjectList;
-import it.unimi.dsi.fastutil.objects.Reference2IntMap;
+import com.mojang.serialization.Lifecycle;
+import it.unimi.dsi.fastutil.objects.Object2IntMap;
 import net.bennyboops.modid.world.RemoveFromRegistry;
 import net.minecraft.registry.MutableRegistry;
 import net.minecraft.registry.Registry;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.SimpleRegistry;
 import net.minecraft.registry.entry.RegistryEntry;
-import net.minecraft.registry.entry.RegistryEntryInfo;
 import net.minecraft.util.Identifier;
 import org.slf4j.Logger;
 import org.spongepowered.asm.mixin.Final;
@@ -31,9 +31,9 @@ public abstract class SimpleRegistryMixin<T> implements RemoveFromRegistry<T>, M
     @Shadow @Final private Map<T, RegistryEntry.Reference<T>> valueToEntry;
     @Shadow @Final private Map<Identifier, RegistryEntry.Reference<T>> idToEntry;
     @Shadow @Final private Map<RegistryKey<T>, RegistryEntry.Reference<T>> keyToEntry;
-    @Shadow @Final private Map<RegistryKey<T>, RegistryEntryInfo> keyToEntryInfo;
+    @Shadow @Final private Map<T, Lifecycle> entryToLifecycle;
     @Shadow @Final private ObjectList<RegistryEntry.Reference<T>> rawIdToEntry;
-    @Shadow @Final private Reference2IntMap<T> entryToRawId;
+    @Shadow @Final private Object2IntMap<T> entryToRawId;
     @Shadow @Final RegistryKey<? extends Registry<T>> key;
     @Shadow private boolean frozen;
 
@@ -50,7 +50,7 @@ public abstract class SimpleRegistryMixin<T> implements RemoveFromRegistry<T>, M
             this.idToEntry.remove(registryEntry.registryKey().getValue());
             this.valueToEntry.remove(entry);
             this.rawIdToEntry.set(rawId, null);
-            this.keyToEntryInfo.remove(this.key);
+            this.entryToLifecycle.remove(entry);
 
             return true;
         } catch (Throwable e) {
