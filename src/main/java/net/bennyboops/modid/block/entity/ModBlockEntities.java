@@ -3,17 +3,15 @@ package net.bennyboops.modid.block.entity;
 import net.bennyboops.modid.PocketRepose;
 import net.bennyboops.modid.block.ModBlocks;
 import net.minecraft.block.entity.BlockEntityType;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.Registry;
+import net.neoforged.neoforge.registries.RegisterEvent;
 import net.minecraft.util.Identifier;
 
 public class ModBlockEntities {
 
-    public static final BlockEntityType<SuitcaseBlockEntity> SUITCASE_BLOCK_ENTITY =
-            Registry.register(
-                    Registries.BLOCK_ENTITY_TYPE,
-                    Identifier.of(PocketRepose.MOD_ID, "suitcase"),
-                    BlockEntityType.Builder.create(
+    public static BlockEntityType<SuitcaseBlockEntity> SUITCASE_BLOCK_ENTITY;
+
+    public static void registerBlockEntities(RegisterEvent.RegisterHelper<BlockEntityType<?>> helper) {
+        SUITCASE_BLOCK_ENTITY = BlockEntityType.Builder.create(
                             SuitcaseBlockEntity::new,
 
                             ModBlocks.SUITCASE,
@@ -33,10 +31,7 @@ public class ModBlockEntities {
                             ModBlocks.MAGENTA_SUITCASE,
                             ModBlocks.PINK_SUITCASE,
                             ModBlocks.SECRET_BARREL
-                    ).build()
-            );
-
-    public static void registerBlockEntities() {
-        PocketRepose.LOGGER.info("Registering block entities for " + PocketRepose.MOD_ID);
+                    ).build(null);
+        helper.register(Identifier.of(PocketRepose.MOD_ID, "suitcase"), SUITCASE_BLOCK_ENTITY);
     }
 }

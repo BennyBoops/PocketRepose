@@ -94,12 +94,6 @@ public class SuitcaseBlockEntity extends BlockEntity {
         return dimensionLocked;
     }
 
-    private static final Set<UUID> PLAYERS_WHO_ENTERED = new HashSet<>();
-
-    public boolean isFirstTimeEntering(ServerPlayerEntity player) {
-        return !PLAYERS_WHO_ENTERED.contains(player.getUuid());
-    }
-
     public void playerEntered(ServerPlayerEntity player) {
         enteredPlayers.removeIf(data -> data.uuid.equals(player.getUuidAsString()));
 
@@ -110,8 +104,6 @@ public class SuitcaseBlockEntity extends BlockEntity {
                 this.getPos()
         );
         enteredPlayers.add(data);
-
-        PLAYERS_WHO_ENTERED.add(player.getUuid());
 
         Map<String, BlockPos> suitcases = SUITCASE_REGISTRY.computeIfAbsent(
                 boundKeystoneName, k -> new HashMap<>()

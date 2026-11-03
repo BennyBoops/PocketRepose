@@ -5,12 +5,14 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import net.bennyboops.modid.block.ModBlocks;
+import net.bennyboops.modid.block.PocketTravelHandler;
 import net.bennyboops.modid.block.SuitcaseBlock;
 import net.bennyboops.modid.block.entity.ModBlockEntities;
 import net.bennyboops.modid.block.entity.SuitcaseBlockEntity;
 import net.bennyboops.modid.criterion.EnterPocketDimensionCriterion;
 import net.bennyboops.modid.data.MobEntryData;
 import net.bennyboops.modid.data.PlayerEntryData;
+import net.bennyboops.modid.data.PocketReposeSettingsData;
 import net.bennyboops.modid.data.SuitcaseLocationTracker;
 import net.bennyboops.modid.data.SuitcaseRegistrySavedData;
 import net.bennyboops.modid.item.KeystoneItem;
@@ -21,18 +23,22 @@ import net.bennyboops.modid.world.Fantasy;
 import net.bennyboops.modid.world.PortalChunkGenerator;
 import net.bennyboops.modid.world.PortalChunkHandler;
 import net.bennyboops.modid.world.RuntimeWorldConfig;
-import net.fabricmc.api.ModInitializer;
-import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
-import net.fabricmc.fabric.api.entity.event.v1.ServerEntityWorldChangeEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
-import net.fabricmc.fabric.api.event.player.UseEntityCallback;
-import net.fabricmc.fabric.api.event.player.UseItemCallback;
 import net.minecraft.block.Block;
+import net.minecraft.entity.Entity;
+import net.minecraft.util.Hand;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.RegisterCommandsEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
+import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
+import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.neoforge.registries.RegisterEvent;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.ContainerComponent;
+import net.bennyboops.modid.util.StackData;
 import net.minecraft.component.type.NbtComponent;
 import net.minecraft.entity.EntityType;
 import net.minecraft.entity.ItemEntity;
@@ -78,44 +84,34 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 
-public class PocketRepose implements ModInitializer {
+@Mod(PocketRepose.FORGE_MOD_ID)
+public class PocketRepose {
 
 	public static final Identifier POCKET_DIMENSION_TYPE_ID =
 			Identifier.of("pocket-repose", "pocket_dimension_type");
 	public static final RegistryKey<DimensionType> POCKET_DIMENSION_TYPE_KEY =
 			RegistryKey.of(RegistryKeys.DIMENSION_TYPE, POCKET_DIMENSION_TYPE_ID);
+	// Resource/registry namespace (shared with the Fabric version, so ids and worlds match)
 	public static final String MOD_ID = "pocket-repose";
+	// Forge mod ids can't contain '-'
+	public static final String FORGE_MOD_ID = "pocket_repose";
 	public static final Logger LOGGER = LoggerFactory.getLogger(MOD_ID);
-	public static final EnterPocketDimensionCriterion ENTER_POCKET_DIMENSION =
-			Registry.register(
-					Registries.CRITERION,
-					Identifier.of(PocketRepose.MOD_ID, "enter_pocket_dimension"),
-					new EnterPocketDimensionCriterion()
-			);
+	public static final EnterPocketDimensionCriterion ENTER_POCKET_DIMENSION = new EnterPocketDimensionCriterion();
 
-	@Override
-	public void onInitialize() {
+	public PocketRepose(IEventBus modEventBus) {
 
 		LOGGER.info("Initializing " + MOD_ID);
 
-		Registry.register(Registries.CHUNK_GENERATOR,
-				Identifier.of("pocket-repose", "void_chunk_generator"),
-				VoidChunkGenerator.CODEC);
+		modEventBus.addListener(PocketRepose::onRegister);
 
-		Registry.register(Registries.CHUNK_GENERATOR,
-				Identifier.of("pocket-repose", "portal_chunk_generator"),
-				PortalChunkGenerator.CODEC);
-
-		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+		NeoForge.EVENT_BUS.addListener((ServerStartedEvent startedEvent) -> {
+			MinecraftServer server = startedEvent.getServer();
 			SuitcaseRegistrySavedData.onServerStart(server);
+			PocketReposeSettingsData.onServerStart(server);
 		});
 
-		ModItems.registerModItems();
-		ModBlocks.registerModBlocks();
-		ModItemGroups.registerItemGroups();
-		ModBlockEntities.registerBlockEntities();
-
 		PortalChunkHandler.initialize();
+		PocketTravelHandler.initialize();
 
 		registerPocketCommands();
 		registerSuitcaseMobTeleport();
@@ -123,7 +119,8 @@ public class PocketRepose implements ModInitializer {
 		registerPlayerEntrySetter();
 		registerKeyRescueMob();
 
-		ServerLifecycleEvents.SERVER_STARTED.register(server -> {
+		NeoForge.EVENT_BUS.addListener((ServerStartedEvent startedEvent) -> {
+			MinecraftServer server = startedEvent.getServer();
 			Path registryFile = server.getSavePath(WorldSavePath.ROOT)
 					.resolve("data")
 					.resolve("pocket-repose")
@@ -132,28 +129,21 @@ public class PocketRepose implements ModInitializer {
 
 			if (!Files.exists(registryFile)) return;
 
-			Registry<Biome> biomeRegistry = server.getRegistryManager().get(RegistryKeys.BIOME);
-			long seed = server.getOverworld().getSeed();
-
 			try {
 				for (String dimName : Files.readAllLines(registryFile)) {
-					Identifier worldId = Identifier.of("pocket-repose", dimName);
-					ChunkGenerator gen = new PortalChunkGenerator(biomeRegistry);
-
-					RuntimeWorldConfig cfg = new RuntimeWorldConfig()
-							.setDimensionType(POCKET_DIMENSION_TYPE_KEY)
-							.setGenerator(gen)
-							.setSeed(seed);
-
-					Fantasy.get(server).getOrOpenPersistentWorld(worldId, cfg);
+					if (dimName.isBlank()) continue;
+					Identifier worldId = Identifier.of("pocket-repose", dimName.trim());
+					Fantasy.get(server).getOrOpenPersistentWorld(worldId, createPocketWorldConfig(server));
 				}
 			} catch (IOException e) {
 				LOGGER.error("Failed to reload pocket dimensions", e);
 			}
 		});
 
-		ServerEntityWorldChangeEvents.AFTER_ENTITY_CHANGE_WORLD.register((originalEntity, newEntity, origin, destination) -> {
-			if (!(newEntity instanceof ItemEntity itemEntity)) return;
+		// Fabric's AFTER_ENTITY_CHANGE_WORLD equivalent: track suitcase items arriving in a world
+		NeoForge.EVENT_BUS.addListener((EntityJoinLevelEvent joinEvent) -> {
+			if (joinEvent.loadedFromDisk() || !(joinEvent.getLevel() instanceof ServerWorld destination)) return;
+			if (!(joinEvent.getEntity() instanceof ItemEntity itemEntity)) return;
 
 			ItemStack stack = itemEntity.getStack();
 			if (!(stack.getItem() instanceof BlockItem bi) || !(bi.getBlock() instanceof SuitcaseBlock)) return;
@@ -206,7 +196,8 @@ public class PocketRepose implements ModInitializer {
 			}
 		});
 
-		ServerTickEvents.END_SERVER_TICK.register(server -> {
+		NeoForge.EVENT_BUS.addListener((ServerTickEvent.Post tickEvent) -> {
+			MinecraftServer server = tickEvent.getServer();
 			SuitcaseLocationTracker tracker = SuitcaseLocationTracker.get(server);
 			if (tracker == null) return;
 
@@ -252,7 +243,7 @@ public class PocketRepose implements ModInitializer {
 
 								if (st.getItem() instanceof BlockItem b && b.getBlock() instanceof SuitcaseBlock) return true;
 
-								return st.get(DataComponentTypes.CONTAINER) != null;
+								return StackData.hasContainedStacks(st);
 							}
 					);
 
@@ -305,10 +296,7 @@ public class PocketRepose implements ModInitializer {
 
 		updateSuitcaseLocationFromItem(tracker, stack, dimStr, x, y, z, yaw, pitch);
 
-		ContainerComponent container = stack.get(DataComponentTypes.CONTAINER);
-		if (container == null) return;
-
-		for (ItemStack inner : container.iterateNonEmpty()) {
+		for (ItemStack inner : StackData.getContainedStacks(stack)) {
 			scanStackRecursivelyForSuitcases(tracker, inner, dimStr, x, y, z, yaw, pitch, depth - 1);
 		}
 	}
@@ -481,10 +469,27 @@ public class PocketRepose implements ModInitializer {
 			}
 		}
 	}
+	/**
+	 * Builds the config used for every pocket dimension. Game rules, difficulty, time and weather are
+	 * mirrored from the overworld so that /gamerule and /difficulty apply inside pocket dimensions too,
+	 * and a freshly created pocket dimension behaves the same as one reloaded after a restart.
+	 */
+	public static RuntimeWorldConfig createPocketWorldConfig(MinecraftServer server) {
+		Registry<Biome> biomeRegistry = server.getRegistryManager().get(RegistryKeys.BIOME);
+		return new RuntimeWorldConfig()
+				.setDimensionType(POCKET_DIMENSION_TYPE_KEY)
+				.setGenerator(new PortalChunkGenerator(biomeRegistry))
+				.setSeed(server.getOverworld().getSeed())
+				.setShouldTickTime(false)
+				.setMirrorOverworldGameRules(true)
+				.setMirrorOverworldDifficulty(true)
+				.setMirrorOverworldTimeAndWeather(true);
+	}
 	public static final RegistryKey<Biome> VOID_BIOME_KEY =
 			RegistryKey.of(RegistryKeys.BIOME, Identifier.of("pocket-repose", "pocket_islands"));
 	private void registerPocketCommands() {
-		CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) -> {
+		NeoForge.EVENT_BUS.addListener((RegisterCommandsEvent commandsEvent) -> {
+			var dispatcher = commandsEvent.getDispatcher();
 			dispatcher.register(
 					LiteralArgumentBuilder.<ServerCommandSource>literal("pocketRepose")
 
@@ -500,8 +505,8 @@ public class PocketRepose implements ModInitializer {
 											return 0;
 										}
 										Vec3d pos = src.getPosition();
-										float yaw = src.getEntity().getYaw();
-										float pitch = src.getEntity().getPitch();
+										float yaw = src.getRotation().y;
+										float pitch = src.getRotation().x;
 
 										MobEntryData.get(world).setEntry(pos, yaw, pitch);
 										src.sendFeedback(() -> Text.literal(
@@ -523,8 +528,8 @@ public class PocketRepose implements ModInitializer {
 											return 0;
 										}
 										Vec3d pos = src.getPosition();
-										float yaw = src.getEntity().getYaw();
-										float pitch = src.getEntity().getPitch();
+										float yaw = src.getRotation().y;
+										float pitch = src.getRotation().x;
 
 										PlayerEntryData.get(world).setEntry(pos, yaw, pitch);
 										src.sendFeedback(() -> Text.literal(
@@ -536,6 +541,7 @@ public class PocketRepose implements ModInitializer {
 
 							// reset entry helper (kept from your original)
 							.then(CommandManager.literal("resetPlayerEntry")
+									.requires(src -> src.hasPermissionLevel(2))
 									.then(CommandManager.argument("dimension", StringArgumentType.word())
 											.executes(ctx -> resetPocketDimension(ctx, StringArgumentType.getString(ctx, "dimension")))
 									)
@@ -575,6 +581,7 @@ public class PocketRepose implements ModInitializer {
 												boolean value = BoolArgumentType.getBool(ctx, "value");
 												setCanCaptureHostile(value);
 												ServerCommandSource src = ctx.getSource();
+												PocketReposeSettingsData.onSettingsChanged(src.getServer());
 												src.sendFeedback(() -> Text.literal(
 														value ? "§aHostile mob capture enabled" : "§cHostile mob capture disabled"
 												), false);
@@ -599,6 +606,7 @@ public class PocketRepose implements ModInitializer {
 												boolean value = BoolArgumentType.getBool(ctx, "value");
 												setSpawnIsland(value);
 												ServerCommandSource src = ctx.getSource();
+												PocketReposeSettingsData.onSettingsChanged(src.getServer());
 												src.sendFeedback(() -> Text.literal(
 														value ? "§aIsland structure spawning enabled" : "§cIsland structure spawning disabled (grass cube will spawn)"
 												), false);
@@ -627,12 +635,13 @@ public class PocketRepose implements ModInitializer {
 
 														try {
 															Identifier entityId = Identifier.of(entityString);
-															EntityType<?> entityType = Registries.ENTITY_TYPE.get(entityId);
+															Optional<EntityType<?>> found = Registries.ENTITY_TYPE.getOrEmpty(entityId);
 
-															if (entityType == EntityType.PIG && !entityString.equals("minecraft:pig")) {
+															if (found.isEmpty()) {
 																src.sendError(Text.literal("§cUnknown entity type: " + entityString));
 																return 0;
 															}
+															EntityType<?> entityType = found.get();
 
 															if (entityType == EntityType.PLAYER) {
 																src.sendError(Text.literal("§cCannot blacklist players"));
@@ -640,6 +649,7 @@ public class PocketRepose implements ModInitializer {
 															}
 
 															addToBlacklist(entityType);
+															PocketReposeSettingsData.onSettingsChanged(src.getServer());
 															src.sendFeedback(() -> Text.literal(
 																	"§aAdded " + entityId + " to blacklist"
 															), false);
@@ -660,14 +670,16 @@ public class PocketRepose implements ModInitializer {
 
 														try {
 															Identifier entityId = Identifier.of(entityString);
-															EntityType<?> entityType = Registries.ENTITY_TYPE.get(entityId);
+															Optional<EntityType<?>> found = Registries.ENTITY_TYPE.getOrEmpty(entityId);
 
-															if (entityType == EntityType.PIG && !entityString.equals("minecraft:pig")) {
+															if (found.isEmpty()) {
 																src.sendError(Text.literal("§cUnknown entity type: " + entityString));
 																return 0;
 															}
+															EntityType<?> entityType = found.get();
 
 															boolean removed = removeFromBlacklist(entityType);
+															PocketReposeSettingsData.onSettingsChanged(src.getServer());
 															if (removed) {
 																src.sendFeedback(() -> Text.literal(
 																		"§aRemoved " + entityId + " from blacklist"
@@ -709,6 +721,7 @@ public class PocketRepose implements ModInitializer {
 												ServerCommandSource src = ctx.getSource();
 												int count = getEntityBlacklist().size();
 												clearBlacklist();
+												PocketReposeSettingsData.onSettingsChanged(src.getServer());
 												src.sendFeedback(() -> Text.literal(
 														"§aCleared blacklist (removed " + count + " entities)"
 												), false);
@@ -726,6 +739,7 @@ public class PocketRepose implements ModInitializer {
 												setAllowRecursion(value);
 
 												ServerCommandSource src = ctx.getSource();
+												PocketReposeSettingsData.onSettingsChanged(src.getServer());
 												src.sendFeedback(() -> Text.literal(
 														value ? "§aSuitcase recursion enabled" : "§cSuitcase recursion disabled"
 												), false);
@@ -775,7 +789,7 @@ public class PocketRepose implements ModInitializer {
 		return 1;
 	}
 	private void registerPlayerEntrySetter() {
-		UseItemCallback.EVENT.register((player, world, hand) -> {
+		registerUseItem((player, world, hand) -> {
 			ItemStack s = player.getStackInHand(hand);
 			if (world.isClient || hand != net.minecraft.util.Hand.MAIN_HAND || s.getItem() != Items.BONE)
 				return TypedActionResult.pass(s);
@@ -799,7 +813,7 @@ public class PocketRepose implements ModInitializer {
 		});
 	}
 	private void registerMobEntrySetter() {
-		UseItemCallback.EVENT.register((player, world, hand) -> {
+		registerUseItem((player, world, hand) -> {
 			ItemStack stack = player.getStackInHand(hand);
 			if (world.isClient || hand != net.minecraft.util.Hand.MAIN_HAND) {
 				return TypedActionResult.pass(stack);
@@ -865,6 +879,12 @@ public class PocketRepose implements ModInitializer {
 	public static void clearBlacklist() {
 		entityBlacklist.clear();
 	}
+	public static void resetSettings() {
+		canCaptureHostile = false;
+		spawnIsland = true;
+		allowRecursion = true;
+		entityBlacklist.clear();
+	}
 	private boolean isHostileMob(LivingEntity mob) {
 		return mob instanceof HostileEntity ||
 				mob instanceof SpiderEntity ||
@@ -874,7 +894,7 @@ public class PocketRepose implements ModInitializer {
 				(mob instanceof WolfEntity wolf && wolf.hasAngerTime());
 	}
 	private void registerSuitcaseMobTeleport() {
-		UseEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
+		registerUseEntity((player, world, hand, entity) -> {
 			if (world.isClient) return ActionResult.PASS;
 
 			if (hand != net.minecraft.util.Hand.MAIN_HAND) return ActionResult.PASS;
@@ -1024,7 +1044,7 @@ public class PocketRepose implements ModInitializer {
 		});
 	}
 	private void registerKeyRescueMob() {
-		UseEntityCallback.EVENT.register((player, world, hand, entity, hit) -> {
+		registerUseEntity((player, world, hand, entity) -> {
 			if (world.isClient) return ActionResult.PASS;
 			if (!(player instanceof ServerPlayerEntity sp)) return ActionResult.PASS;
 
@@ -1087,7 +1107,6 @@ public class PocketRepose implements ModInitializer {
 					ServerWorld target = worldFromId(server, loc.dimensionId);
 					if (target != null) {
 						Vec3d dest = new Vec3d(loc.x, loc.y, loc.z);
-						sp.sendMessage(Text.literal("§6No suitcase found — returning mob to last known point"), true);
 						if (teleportMobTo(mob, target, dest)) {
 							teleported = true;
 							targetWorldUsed = target;
@@ -1236,5 +1255,51 @@ public class PocketRepose implements ModInitializer {
 		}
 
 		return TeleportResult.fail();
+	}
+
+	// Forge only allows registry entries to be created while their registry is open
+	private static void onRegister(RegisterEvent event) {
+		event.register(RegistryKeys.BLOCK, ModBlocks::registerBlocks);
+		event.register(RegistryKeys.ITEM, helper -> {
+			ModItems.registerModItems(helper);
+			ModBlocks.registerBlockItems(helper);
+		});
+		event.register(RegistryKeys.BLOCK_ENTITY_TYPE, ModBlockEntities::registerBlockEntities);
+		event.register(RegistryKeys.ITEM_GROUP, ModItemGroups::registerItemGroups);
+		event.register(RegistryKeys.CRITERION, helper ->
+				helper.register(Identifier.of(MOD_ID, "enter_pocket_dimension"), ENTER_POCKET_DIMENSION));
+		event.register(RegistryKeys.CHUNK_GENERATOR, helper -> {
+			helper.register(Identifier.of(MOD_ID, "void_chunk_generator"), VoidChunkGenerator.CODEC);
+			helper.register(Identifier.of(MOD_ID, "portal_chunk_generator"), PortalChunkGenerator.CODEC);
+		});
+	}
+
+	private interface UseItemHandler {
+		TypedActionResult<ItemStack> interact(PlayerEntity player, World world, Hand hand);
+	}
+
+	private interface UseEntityHandler {
+		ActionResult interact(PlayerEntity player, World world, Hand hand, Entity entity);
+	}
+
+	// Adapters so the Fabric-style callbacks above run on Forge's right-click events
+	private static void registerUseItem(UseItemHandler handler) {
+		NeoForge.EVENT_BUS.addListener((PlayerInteractEvent.RightClickItem event) -> {
+			ActionResult result = handler.interact(event.getEntity(), event.getLevel(), event.getHand()).getResult();
+			if (result != ActionResult.PASS) {
+				event.setCanceled(true);
+				event.setCancellationResult(result);
+			}
+		});
+	}
+
+	private static void registerUseEntity(UseEntityHandler handler) {
+		NeoForge.EVENT_BUS.addListener((PlayerInteractEvent.EntityInteract event) -> {
+			ActionResult result = handler.interact(event.getEntity(), event.getLevel(), event.getHand(), event.getTarget());
+			if (result != ActionResult.PASS) {
+				event.setCanceled(true);
+				event.setCancellationResult(result);
+			}
+		});
 	}
 }

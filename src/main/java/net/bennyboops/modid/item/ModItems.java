@@ -2,18 +2,15 @@ package net.bennyboops.modid.item;
 
 import net.bennyboops.modid.PocketRepose;
 import net.minecraft.item.Item;
-import net.minecraft.registry.Registries;
-import net.minecraft.registry.Registry;
 import net.minecraft.util.Identifier;
+import net.neoforged.neoforge.registries.RegisterEvent;
 
 public class ModItems {
-    public static final Item KEYSTONE = registerItem("keystone", new KeystoneItem(new Item.Settings()));
+    public static Item KEYSTONE;
 
-    private static Item registerItem(String name, Item item) {
-        return Registry.register(Registries.ITEM, Identifier.of(PocketRepose.MOD_ID, name), item);
-    }
-
-    public static void registerModItems() {
-        PocketRepose.LOGGER.info("Registering mod items for " + PocketRepose.MOD_ID);
+    // Forge only allows items to be created while the item registry is open, so this runs from RegisterEvent
+    public static void registerModItems(RegisterEvent.RegisterHelper<Item> helper) {
+        KEYSTONE = new KeystoneItem(new Item.Settings());
+        helper.register(Identifier.of(PocketRepose.MOD_ID, "keystone"), KEYSTONE);
     }
 }

@@ -41,13 +41,15 @@ public class RuntimeWorld extends ServerWorld {
                 null
         );
         this.style = style;
-        this.flat = config.isFlat().orElse(super.isFlat());
+        this.flat = config.isFlat() != null ? config.isFlat() : super.isFlat();
+        this.shouldTickTime = config.shouldTickTime();
     }
 
 
     protected RuntimeWorld(MinecraftServer server, Executor workerExecutor, LevelStorage.Session session, ServerWorldProperties properties, RegistryKey<World> worldKey, DimensionOptions dimensionOptions, WorldGenerationProgressListener worldGenerationProgressListener, boolean debugWorld, long seed, List<SpecialSpawner> spawners, boolean shouldTickTime, @Nullable RandomSequencesState randomSequencesState, Style style) {
         super(server, workerExecutor, session, properties, worldKey, dimensionOptions, worldGenerationProgressListener, debugWorld, seed, spawners, shouldTickTime, randomSequencesState);
         this.style = style;
+        this.shouldTickTime = shouldTickTime;
     }
 
 

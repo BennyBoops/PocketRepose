@@ -1,8 +1,9 @@
 package net.bennyboops.modid.criterion;
 
-import com.google.gson.JsonObject;
 import com.mojang.serialization.Codec;
+import com.mojang.serialization.codecs.RecordCodecBuilder;
 import net.minecraft.advancement.criterion.AbstractCriterion;
+import net.minecraft.predicate.entity.EntityPredicate;
 import net.minecraft.predicate.entity.LootContextPredicate;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.util.Identifier;
@@ -19,28 +20,18 @@ public class EnterPocketDimensionCriterion
         return ID;
     }
 
-    protected Conditions conditionsFromJson(JsonObject json, LootContextPredicate playerPredicate) {
-        return new Conditions(playerPredicate);
-    }
-
     public void trigger(ServerPlayerEntity player) {
         this.trigger(player, c -> true);
     }
 
     @Override
     public Codec<Conditions> getConditionsCodec() {
-        return null;
+        return Conditions.CODEC;
     }
 
-    public static class Conditions implements AbstractCriterion.Conditions {
-        public Conditions(LootContextPredicate playerPredicate) {
-            super();
-        }
-
-        @Override
-        public Optional<LootContextPredicate> player() {
-            return Optional.empty();
-        }
-
+    public record Conditions(Optional<LootContextPredicate> player) implements AbstractCriterion.Conditions {
+        public static final Codec<Conditions> CODEC = RecordCodecBuilder.create(instance -> instance.group(
+                EntityPredicate.LOOT_CONTEXT_PREDICATE_CODEC.optionalFieldOf("player").forGetter(Conditions::player)
+        ).apply(instance, Conditions::new));
     }
 }

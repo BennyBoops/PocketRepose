@@ -1,6 +1,5 @@
 package net.bennyboops.modid.mixin;
 
-import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import com.mojang.logging.LogUtils;
 import it.unimi.dsi.fastutil.objects.ObjectList;
 import it.unimi.dsi.fastutil.objects.Reference2IntMap;
@@ -18,6 +17,8 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.Map;
 import java.util.Objects;
@@ -50,7 +51,7 @@ public abstract class SimpleRegistryMixin<T> implements RemoveFromRegistry<T>, M
             this.idToEntry.remove(registryEntry.registryKey().getValue());
             this.valueToEntry.remove(entry);
             this.rawIdToEntry.set(rawId, null);
-            this.keyToEntryInfo.remove(this.key);
+            this.keyToEntryInfo.remove(registryEntry.registryKey());
 
             return true;
         } catch (Throwable e) {
@@ -75,8 +76,8 @@ public abstract class SimpleRegistryMixin<T> implements RemoveFromRegistry<T>, M
         return this.frozen;
     }
 
-    @ModifyReturnValue(method = "streamEntries", at = @At("RETURN"))
-    public Stream<RegistryEntry.Reference<T>> fixEntryStream(Stream<RegistryEntry.Reference<T>> original) {
-        return original.filter(Objects::nonNull);
+    @Inject(method = "streamEntries", at = @At("RETURN"), cancellable = true)
+    private void fixEntryStream(CallbackInfoReturnable<Stream<RegistryEntry.Reference<T>>> cir) {
+        cir.setReturnValue(cir.getReturnValue().filter(Objects::nonNull));
     }
 }

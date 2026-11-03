@@ -2,7 +2,6 @@ package net.bennyboops.modid.world;
 
 import com.google.common.base.Preconditions;
 import net.bennyboops.modid.util.GameRuleStore;
-import net.fabricmc.fabric.api.util.TriState;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.registry.entry.RegistryEntry;
@@ -31,6 +30,7 @@ public final class RuntimeWorldConfig {
     private final GameRuleStore gameRules = new GameRuleStore();
     private boolean mirrorOverworldGameRules = false;
     private boolean mirrorOverworldDifficulty = false;
+    private boolean mirrorOverworldTimeAndWeather = false;
     private RuntimeWorld.Constructor worldConstructor = RuntimeWorld::new;
 
     private int sunnyTime = Integer.MAX_VALUE;
@@ -38,7 +38,8 @@ public final class RuntimeWorldConfig {
     private int rainTime;
     private boolean thundering;
     private int thunderTime;
-    private TriState flat = TriState.DEFAULT;
+    @Nullable
+    private Boolean flat = null;
 
     /**
      * Sets the world seed
@@ -217,6 +218,18 @@ public final class RuntimeWorldConfig {
     }
 
     /**
+     * Defines if the world should follow the overworld time of day and weather (like the vanilla nether/end do)
+     *
+     * @param mirror Whenever it should mirror or not
+     *
+     * @return The same instance of RuntimeWorldConfig
+     */
+    public RuntimeWorldConfig setMirrorOverworldTimeAndWeather(boolean mirror) {
+        this.mirrorOverworldTimeAndWeather = mirror;
+        return this;
+    }
+
+    /**
      * Modifies the weather to sunny
      *
      * @param sunnyTime For how many ticks it should be sunny
@@ -284,11 +297,11 @@ public final class RuntimeWorldConfig {
     /**
      * Defines if the world is a flat world or not
      *
-     * @param state If the world should be flat, not flat or use the default value
+     * @param state If the world should be flat, not flat, or null to use the default value
      *
      * @return The same instance of RuntimeWorldConfig
      */
-    public RuntimeWorldConfig setFlat(TriState state) {
+    public RuntimeWorldConfig setFlat(@Nullable Boolean state) {
         this.flat = state;
         return this;
     }
@@ -301,7 +314,7 @@ public final class RuntimeWorldConfig {
      * @return The same instance of RuntimeWorldConfig
      */
     public RuntimeWorldConfig setFlat(boolean state) {
-        return this.setFlat(TriState.of(state));
+        return this.setFlat(Boolean.valueOf(state));
     }
 
     public long getSeed() {
@@ -379,6 +392,10 @@ public final class RuntimeWorldConfig {
         return this.mirrorOverworldDifficulty;
     }
 
+    public boolean shouldMirrorOverworldTimeAndWeather() {
+        return this.mirrorOverworldTimeAndWeather;
+    }
+
     public int getSunnyTime() {
         return this.sunnyTime;
     }
@@ -399,7 +416,8 @@ public final class RuntimeWorldConfig {
         return this.thundering;
     }
 
-    public TriState isFlat() {
+    @Nullable
+    public Boolean isFlat() {
         return this.flat;
     }
 }

@@ -3,8 +3,9 @@ package net.bennyboops.modid.world;
 import com.google.common.base.Preconditions;
 import it.unimi.dsi.fastutil.objects.ReferenceOpenHashSet;
 import net.bennyboops.modid.mixin.MinecraftServerAccess;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.neoforge.event.server.ServerStoppingEvent;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
 import net.minecraft.server.MinecraftServer;
@@ -50,13 +51,13 @@ public final class Fantasy {
     private final Set<ServerWorld> unloadingQueue = new ReferenceOpenHashSet<>();
 
     static {
-        ServerTickEvents.START_SERVER_TICK.register(server -> {
-            Fantasy fantasy = get(server);
+        NeoForge.EVENT_BUS.addListener((ServerTickEvent.Pre event) -> {
+            Fantasy fantasy = get(event.getServer());
             fantasy.tick();
         });
 
-        ServerLifecycleEvents.SERVER_STOPPING.register(server -> {
-            Fantasy fantasy = get(server);
+        NeoForge.EVENT_BUS.addListener((ServerStoppingEvent event) -> {
+            Fantasy fantasy = get(event.getServer());
             fantasy.onServerStopping();
         });
     }

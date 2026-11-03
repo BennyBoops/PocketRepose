@@ -2,7 +2,7 @@
   "parent": "minecraft:adventure/root",
   "display": {
     "icon": {
-      "item": "pocket-repose:suitcase"
+      "id": "pocket-repose:suitcase"
     },
     "title": {
       "text": "Smaller on the Outside"

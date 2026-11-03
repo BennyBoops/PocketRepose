@@ -259,6 +259,18 @@ public class SuitcaseBlock extends BlockWithEntity {
             return;
         }
 
+        // Teleporting from inside the movement packet handler makes vanilla re-apply the old movement
+        // afterwards (in survival that puts the player at their old coordinates, but in the pocket
+        // dimension), so the actual entry happens at the end of the server tick
+        PocketTravelHandler.requestEntry(player, (ServerWorld) world, pos);
+    }
+
+    /** Sends a player into the pocket dimension of the suitcase at pos, if they can still enter it. */
+    public static void enterSuitcase(ServerPlayerEntity player, ServerWorld world, BlockPos pos) {
+        if (player.getServerWorld() != world || !player.isAlive() || player.isRemoved()) return;
+        BlockState state = world.getBlockState(pos);
+        if (!(state.getBlock() instanceof SuitcaseBlock) || !state.get(OPEN)) return;
+
         BlockEntity be = world.getBlockEntity(pos);
         if (!(be instanceof SuitcaseBlockEntity suitcase)) return;
 
@@ -279,9 +291,9 @@ public class SuitcaseBlock extends BlockWithEntity {
             return;
         }
 
-        boolean first = suitcase.isFirstTimeEntering(player);
         suitcase.playerEntered(player);
-        if (first) PocketRepose.ENTER_POCKET_DIMENSION.trigger(player);
+        // The advancement system only grants the criterion once per player, so always trigger it
+        PocketRepose.ENTER_POCKET_DIMENSION.trigger(player);
 
         SuitcaseLocationTracker tracker = SuitcaseLocationTracker.get(world.getServer());
         if (tracker != null) {
@@ -313,52 +325,20 @@ public class SuitcaseBlock extends BlockWithEntity {
         TeleportTarget tpTarget = new TeleportTarget(target, dest, Vec3d.ZERO, ped.getEntryYaw(), player.getPitch(), TeleportTarget.NO_OP);
         player.teleportTo(tpTarget);
 
-        player.networkHandler.sendPacket(new StopSoundS2CPacket(null, null));
+        player.networkHandler.send(new StopSoundS2CPacket(null, null));
         world.playSound(null, pos.getX() + .5, pos.getY() + .5, pos.getZ() + .5,
                 SoundEvents.ITEM_BUNDLE_DROP_CONTENTS, SoundCategory.PLAYERS, 2F, 1F);
     }
 
 
-    private ServerWorld ensureDimensionExists(net.minecraft.server.MinecraftServer server, String key, Identifier dimId) {
+    private static ServerWorld ensureDimensionExists(net.minecraft.server.MinecraftServer server, String key, Identifier dimId) {
         RegistryKey<World> dimKey = RegistryKey.of(RegistryKeys.WORLD, dimId);
         ServerWorld existing = server.getWorld(dimKey);
         if (existing != null) return existing;
 
-        Registry<Biome> biomeRegistry = server.getRegistryManager().get(RegistryKeys.BIOME);
-        ChunkGenerator generator = new PortalChunkGenerator(biomeRegistry);
-        long seed = server.getOverworld().getSeed();
-
-        RuntimeWorldConfig config = new RuntimeWorldConfig()
-                .setDimensionType(PocketRepose.POCKET_DIMENSION_TYPE_KEY)
-                .setGenerator(generator)
-                .setSeed(seed)
-                .setShouldTickTime(false);
-
-        RuntimeWorldHandle handle = Fantasy.get(server).getOrOpenPersistentWorld(dimId, config);
-        ServerWorld world = handle.asWorld();
-
-        world.setChunkForced(0, 0, true);
-        generateInitialStructure(world);
-        return world;
-    }
-
-    private void generateInitialStructure(ServerWorld world) {
-        for (int x = -2; x <= 2; x++) {
-            for (int z = -2; z <= 2; z++) {
-                for (int y = -64; y <= -61; y++) {
-                    BlockPos portalPos = new BlockPos(x, y, z);
-                    world.setBlockState(portalPos, ModBlocks.PORTAL.getDefaultState(), Block.NOTIFY_ALL);
-                }
-            }
-        }
-
-        BlockPos platformPos = new BlockPos(0, 96, 0);
-        world.setBlockState(platformPos, Blocks.OAK_PLANKS.getDefaultState(), Block.NOTIFY_ALL);
-
-        BlockPos exitPortal = new BlockPos(0, 100, 0);
-        world.setBlockState(exitPortal, ModBlocks.PORTAL.getDefaultState(), Block.NOTIFY_ALL);
-
-        PlayerEntryData.get(world).setEntry(new Vec3d(0.5, 97.0, 0.5), 0f, 0f);
+        // Same path as using the keystone: registers the dimension so it reloads on restart, and only
+        // builds the starting island when the dimension is brand new (never over an existing one)
+        return KeystoneItem.createOrLoadPersistentDimension(server, dimId.getPath());
     }
 
     @Override public BlockRenderType getRenderType(BlockState state) { return BlockRenderType.MODEL; }
@@ -394,8 +374,9 @@ public class SuitcaseBlock extends BlockWithEntity {
         return new SuitcaseBlockEntity(pos, state);
     }
 
-    public ItemStack getPickStack(BlockView world, BlockPos pos, BlockState state) {
-        ItemStack stack = super.getPickStack((WorldView) world, pos, state);
+    @Override
+    public ItemStack getPickStack(WorldView world, BlockPos pos, BlockState state) {
+        ItemStack stack = super.getPickStack(world, pos, state);
         BlockEntity be = world.getBlockEntity(pos);
 
         if (be instanceof SuitcaseBlockEntity suitcase) {
@@ -406,7 +387,8 @@ public class SuitcaseBlock extends BlockWithEntity {
                 beTag.putString("BoundKeystone", key);
                 beTag.putBoolean("Locked", suitcase.isLocked());
 
-                beTag.putUuid(SuitcaseBlockEntity.NBT_SUITCASE_ID, suitcase.getSuitcaseId());
+                // No SuitcaseId: a picked copy is a new suitcase. Sharing the id made the exit
+                // tracker follow the copy around (e.g. into the pocket dimension itself).
 
                 stack.set(DataComponentTypes.BLOCK_ENTITY_DATA, NbtComponent.of(beTag));
 
