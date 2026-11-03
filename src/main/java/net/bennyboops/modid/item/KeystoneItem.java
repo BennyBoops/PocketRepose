@@ -49,9 +49,6 @@ import java.util.*;
 
 public class KeystoneItem extends Item {
 
-    private static final Identifier POCKET_DIMENSION_TYPE_ID =
-            Identifier.of("pocket-repose", "pocket_dimension_type");
-
     public KeystoneItem(Settings settings) { super(settings); }
 
     @Override
@@ -71,8 +68,15 @@ public class KeystoneItem extends Item {
             return TypedActionResult.success(stack);
         }
 
-        String dimensionName = "pocket_dimension_" +
-                keystoneName.replaceAll("[^a-z0-9_]", "");
+        String sanitizedName = keystoneName.replaceAll("[^a-z0-9_]", "");
+        if (sanitizedName.isEmpty()) {
+            // Names with no a-z/0-9/_ characters would all share the same "pocket_dimension_" world
+            player.sendMessage(Text.literal("Keystone name must contain letters or numbers")
+                    .formatted(Formatting.RED), true);
+            return TypedActionResult.fail(stack);
+        }
+
+        String dimensionName = "pocket_dimension_" + sanitizedName;
         createOrLoadPersistentDimension(world.getServer(), dimensionName);
 
         if (!stack.hasEnchantments()) {
@@ -91,30 +95,19 @@ public class KeystoneItem extends Item {
         return TypedActionResult.success(stack);
     }
 
-    private void createOrLoadPersistentDimension(MinecraftServer server,
-                                                 String dimensionName) {
+    public static ServerWorld createOrLoadPersistentDimension(MinecraftServer server,
+                                                              String dimensionName) {
 
         Identifier worldId = Identifier.of("pocket-repose", dimensionName);
         Path dimPath = server.getSavePath(WorldSavePath.ROOT)
                 .resolve("dimensions")
                 .resolve("pocket-repose")
                 .resolve(dimensionName);
-        boolean exists = Files.exists(dimPath);
+        // A world created this session may not have been saved to disk yet, so also check if it's loaded
+        boolean exists = Files.exists(dimPath)
+                || server.getWorld(RegistryKey.of(RegistryKeys.WORLD, worldId)) != null;
 
-        RegistryKey<DimensionType> typeKey =
-                RegistryKey.of(RegistryKeys.DIMENSION_TYPE,
-                        POCKET_DIMENSION_TYPE_ID);
-
-        Registry<Biome> biomeRegistry =
-                server.getRegistryManager().get(RegistryKeys.BIOME);
-
-        ChunkGenerator generator = new PortalChunkGenerator(biomeRegistry);
-        long seed = server.getOverworld().getSeed();
-
-        RuntimeWorldConfig cfg = new RuntimeWorldConfig()
-                .setDimensionType(typeKey)
-                .setGenerator(generator)
-                .setSeed(seed);
+        RuntimeWorldConfig cfg = PocketRepose.createPocketWorldConfig(server);
 
         RuntimeWorldHandle handle =
                 Fantasy.get(server).getOrOpenPersistentWorld(worldId, cfg);
@@ -130,9 +123,10 @@ public class KeystoneItem extends Item {
                 PocketRepose.LOGGER.info("Created new pocket dimension {} with grass cube", dimensionName);
             }
         }
+        return handle.asWorld();
     }
 
-    private void placeGrassCube(ServerWorld world) {
+    private static void placeGrassCube(ServerWorld world) {
         BlockPos spawnPos = new BlockPos(17, 97, 9);
 
         for (int x = -1; x <= 1; x++) {
@@ -153,7 +147,7 @@ public class KeystoneItem extends Item {
         PocketRepose.LOGGER.info("Placed cube, portal, and set mob entry at spawn location");
     }
 
-    private void placeStructureImmediately(MinecraftServer server,
+    private static void placeStructureImmediately(MinecraftServer server,
                                            ServerWorld world,
                                            String dimensionName) {
         Identifier structureId = Identifier.of("pocket-repose", "pocket_island_01");
@@ -167,7 +161,7 @@ public class KeystoneItem extends Item {
 
             try {
                 String resourcePath = "/data/pocket-repose/structures/pocket_island_01.nbt";
-                var inputStream = getClass().getResourceAsStream(resourcePath);
+                var inputStream = KeystoneItem.class.getResourceAsStream(resourcePath);
 
                 if (inputStream != null) {
                     PocketRepose.LOGGER.info("Found structure in mod resources");
@@ -290,7 +284,7 @@ public class KeystoneItem extends Item {
         return stack.hasEnchantments();
     }
 
-    private void registerDimension(MinecraftServer server,
+    private static void registerDimension(MinecraftServer server,
                                    String dimensionName) {
         Path dir = server.getSavePath(WorldSavePath.ROOT)
                 .resolve("data/pocket-repose/dimension_registry");

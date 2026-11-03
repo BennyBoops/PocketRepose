@@ -1,6 +1,7 @@
 package net.bennyboops.modid.world;
 
-import net.fabricmc.fabric.api.event.lifecycle.v1.ServerWorldEvents;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.event.level.LevelEvent;
 import net.minecraft.registry.DynamicRegistryManager;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.registry.RegistryKeys;
@@ -49,7 +50,9 @@ final class RuntimeWorldManager {
         RuntimeWorld world = config.getWorldConstructor().createWorld(this.server, worldKey, config, style);
 
         this.serverAccess.getWorlds().put(world.getRegistryKey(), world);
-        ServerWorldEvents.LOAD.invoker().onWorldLoad(this.server, world);
+        // Forge ticks worlds from a cached array, so it has to be told the world list changed
+        this.server.markWorldsDirty();
+        MinecraftForge.EVENT_BUS.post(new LevelEvent.Load(world));
 
         // tick the world to ensure it is ready for use right away
         world.tick(() -> true);
@@ -61,7 +64,8 @@ final class RuntimeWorldManager {
         RegistryKey<World> dimensionKey = world.getRegistryKey();
 
         if (this.serverAccess.getWorlds().remove(dimensionKey, world)) {
-            ServerWorldEvents.UNLOAD.invoker().onWorldUnload(this.server, world);
+            this.server.markWorldsDirty();
+            MinecraftForge.EVENT_BUS.post(new LevelEvent.Unload(world));
 
             SimpleRegistry<DimensionOptions> dimensionsRegistry = getDimensionsRegistry(this.server);
             RemoveFromRegistry.remove(dimensionsRegistry, dimensionKey.getValue());
@@ -103,7 +107,8 @@ final class RuntimeWorldManager {
                 public void setDone() {}
             }, true, false);
 
-            ServerWorldEvents.UNLOAD.invoker().onWorldUnload(RuntimeWorldManager.this.server, world);
+            RuntimeWorldManager.this.server.markWorldsDirty();
+            MinecraftForge.EVENT_BUS.post(new LevelEvent.Unload(world));
 
             SimpleRegistry<DimensionOptions> dimensionsRegistry = getDimensionsRegistry(RuntimeWorldManager.this.server);
             RemoveFromRegistry.remove(dimensionsRegistry, dimensionKey.getValue());

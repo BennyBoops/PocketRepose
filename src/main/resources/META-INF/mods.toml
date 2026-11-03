@@ -1,0 +1,27 @@
+modLoader="javafml"
+loaderVersion="[52,)"
+license="MIT"
+issueTrackerURL="https://github.com/BennyBoops/PocketRepose/issues"
+
+[[mods]]
+modId="pocket_repose"
+version="${version}"
+displayName="Pocket Repose"
+authors="BennyBoops"
+displayURL="https://modrinth.com/mod/pocket-repose"
+logoFile="assets/pocket-repose/icon.png"
+description='''A mod created for explorers in need of a trustworthy home.'''
+
+[[dependencies.pocket_repose]]
+modId="forge"
+mandatory=true
+versionRange="[52,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.pocket_repose]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.21.1,1.21.2)"
+ordering="NONE"
+side="BOTH"
