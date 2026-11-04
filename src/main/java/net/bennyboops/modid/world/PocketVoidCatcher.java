@@ -2,6 +2,7 @@ package net.bennyboops.modid.world;
 
 import net.bennyboops.modid.PocketRepose;
 import net.bennyboops.modid.data.MobEntryData;
+import net.fabricmc.fabric.api.entity.event.v1.ServerEntityWorldChangeEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.entity.Entity;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -13,7 +14,10 @@ import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 /**
  * Anything that falls off a pocket island, or strays too far from it, is returned to that
@@ -32,6 +36,13 @@ public final class PocketVoidCatcher {
     /** Anything further than this from the island centre, horizontally, is brought back. */
     public static final double CATCH_RADIUS = 160.0;
     private static final double CATCH_RADIUS_SQ = CATCH_RADIUS * CATCH_RADIUS;
+    /**
+     * Ticks to leave an entity alone after it arrives from another dimension. Right after a
+     * dimension change the entity can still report its old-world coordinates for a tick, which
+     * would otherwise look like it is thousands of blocks away from the island.
+     */
+    private static final long ARRIVAL_GRACE_TICKS = 40;
+    private static final Map<UUID, Long> ARRIVAL_GRACE = new HashMap<>();
     private static final String DIMENSION_PREFIX = "pocket_dimension_";
 
     private PocketVoidCatcher() {
@@ -39,6 +50,28 @@ public final class PocketVoidCatcher {
 
     public static void register() {
         ServerTickEvents.END_WORLD_TICK.register(PocketVoidCatcher::sweep);
+        ServerEntityWorldChangeEvents.AFTER_PLAYER_CHANGE_WORLD.register(
+                (player, origin, destination) -> grantGrace(player, destination));
+        ServerEntityWorldChangeEvents.AFTER_ENTITY_CHANGE_WORLD.register(
+                (original, replacement, origin, destination) -> grantGrace(replacement, destination));
+    }
+
+    private static void grantGrace(Entity entity, ServerWorld destination) {
+        if (isPocketDimension(destination)) {
+            ARRIVAL_GRACE.put(entity.getUuid(), destination.getTime() + ARRIVAL_GRACE_TICKS);
+        }
+    }
+
+    private static boolean inGrace(Entity entity, long now) {
+        Long until = ARRIVAL_GRACE.get(entity.getUuid());
+        if (until == null) {
+            return false;
+        }
+        if (now >= until) {
+            ARRIVAL_GRACE.remove(entity.getUuid());
+            return false;
+        }
+        return true;
     }
 
     public static boolean isPocketDimension(World world) {
@@ -52,8 +85,9 @@ public final class PocketVoidCatcher {
         }
         // Collect first: teleporting while iterating the entity index is unsafe.
         List<Entity> fallen = new ArrayList<>();
+        long now = world.getTime();
         for (Entity entity : world.iterateEntities()) {
-            if (entity.isRemoved()) {
+            if (entity.isRemoved() || inGrace(entity, now)) {
                 continue;
             }
             double dx = entity.getX() - CENTER_X;
@@ -71,6 +105,10 @@ public final class PocketVoidCatcher {
             return;
         }
         for (Entity entity : fallen) {
+            PocketRepose.LOGGER.info("[pocket-repose] Returning {} to entry point from ({}, {}, {}) in {}",
+                    entity.getName().getString(), String.format("%.1f", entity.getX()),
+                    String.format("%.1f", entity.getY()), String.format("%.1f", entity.getZ()),
+                    world.getRegistryKey().getValue());
             returnToEntry(world, entity, entry);
         }
     }
