@@ -69,8 +69,12 @@ public final class PocketTimeController {
                 return;
             }
             PocketTimeData data = PocketTimeData.get(world);
+            // Sleeping through the night, or /time set, changes the world's clock directly.
+            // Take that over instead of snapping back to our saved value.
+            data.syncFromWorld(world.getTimeOfDay());
             data.tick();
             world.setTimeOfDay(data.getTimeOfDay());
+            data.markApplied();
             if (world.getPlayers().isEmpty()) {
                 return;
             }

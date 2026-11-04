@@ -15,6 +15,8 @@ public class PocketTimeData extends PersistentState {
 
     private long timeOfDay = 6000L;
     private int speed = SPEED_STOPPED;
+    /** The time last written to the world by the controller. Not saved. */
+    private long lastApplied = Long.MIN_VALUE;
 
     public static PocketTimeData get(ServerWorld world) {
         PersistentStateManager mgr = world.getPersistentStateManager();
@@ -47,6 +49,21 @@ public class PocketTimeData extends PersistentState {
 
     public int getSpeed() {
         return speed;
+    }
+
+    /**
+     * Adopts a time change made by something other than the controller, such as the vanilla
+     * sleep skip or a /time command, so it is not overwritten on the next tick.
+     */
+    public void syncFromWorld(long worldTimeOfDay) {
+        if (lastApplied != Long.MIN_VALUE && worldTimeOfDay != lastApplied && worldTimeOfDay != timeOfDay) {
+            timeOfDay = worldTimeOfDay;
+            markDirty();
+        }
+    }
+
+    public void markApplied() {
+        lastApplied = timeOfDay;
     }
 
     /** Advances the clock by the current speed. Returns true if time moved. */
