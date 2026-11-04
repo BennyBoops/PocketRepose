@@ -16,7 +16,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Anything that falls off a pocket island is returned to that dimension's mob entry point.
+ * Anything that falls off a pocket island, or strays too far from it, is returned to that
+ * dimension's mob entry point.
  *
  * The island floats above a walk-through portal floor, so falling entities used to drop into
  * the true void: players hit the exit logic with its many fallbacks, mobs simply died. This
@@ -25,6 +26,12 @@ import java.util.List;
 public final class PocketVoidCatcher {
     /** Well below the island (which bottoms out around y 64) but above the portal floor at y -64. */
     public static final double CATCH_Y = -40.0;
+    /** The island structure is placed at (0,64,0) and is 48 wide, so it is centred here. */
+    private static final double CENTER_X = 24.0;
+    private static final double CENTER_Z = 24.0;
+    /** Anything further than this from the island centre, horizontally, is brought back. */
+    public static final double CATCH_RADIUS = 160.0;
+    private static final double CATCH_RADIUS_SQ = CATCH_RADIUS * CATCH_RADIUS;
     private static final String DIMENSION_PREFIX = "pocket_dimension_";
 
     private PocketVoidCatcher() {
@@ -46,7 +53,12 @@ public final class PocketVoidCatcher {
         // Collect first: teleporting while iterating the entity index is unsafe.
         List<Entity> fallen = new ArrayList<>();
         for (Entity entity : world.iterateEntities()) {
-            if (!entity.isRemoved() && entity.getY() < CATCH_Y) {
+            if (entity.isRemoved()) {
+                continue;
+            }
+            double dx = entity.getX() - CENTER_X;
+            double dz = entity.getZ() - CENTER_Z;
+            if (entity.getY() < CATCH_Y || dx * dx + dz * dz > CATCH_RADIUS_SQ) {
                 fallen.add(entity);
             }
         }
