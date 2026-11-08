@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "building",
+  "ingredients": [
+    {
+      "item": "pocket-repose:portal"
+    },
+    {
+      "item": "minecraft:bamboo_door"
+    }
+  ],
+  "result": {
+    "id": "pocket-repose:bamboo_exit_portal_door",
+    "count": 1
+  }
+}

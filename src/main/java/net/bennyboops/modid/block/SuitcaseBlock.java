@@ -18,6 +18,7 @@ import net.minecraft.component.type.NbtComponent;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
+import net.minecraft.item.ItemConvertible;
 import net.minecraft.item.ItemPlacementContext;
 import net.minecraft.item.ItemStack;
 import net.minecraft.loot.context.LootContextParameterSet;
@@ -51,6 +52,7 @@ import net.minecraft.world.gen.chunk.ChunkGenerator;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
+import java.util.function.Consumer;
 
 public class SuitcaseBlock extends BlockWithEntity {
 
@@ -81,6 +83,39 @@ public class SuitcaseBlock extends BlockWithEntity {
         BlockEntity be = world.getBlockEntity(pos);
         if (!(be instanceof SuitcaseBlockEntity suitcase)) return;
 
+        trackPlacedSuitcase(world, suitcase, stack, exitOnTop(state, world, pos));
+    }
+
+    /**
+     * For someone coming back out on top of the suitcase with this id at exit: the yaw facing the suitcase's
+     * front (the way it was placed facing), or null if that suitcase isn't there.
+     */
+    @Nullable
+    public static Float yawFacingFront(World world, Vec3d exit, @Nullable UUID suitcaseId) {
+        if (suitcaseId == null) return null;
+        BlockPos at = BlockPos.ofFloored(exit);
+        for (BlockPos pos : new BlockPos[]{at, at.down()}) {
+            BlockState state = world.getBlockState(pos);
+            if (state.getBlock() instanceof SuitcaseBlock && world.getBlockEntity(pos) instanceof SuitcaseBlockEntity suitcase
+                    && suitcaseId.equals(suitcase.getSuitcaseId())) {
+                return state.get(FACING).asRotation();
+            }
+        }
+        return null;
+    }
+
+    /** Where travelers come back out of a placed suitcase: standing right on top of it (not on top of its block space). */
+    public static Vec3d exitOnTop(BlockState state, World world, BlockPos pos) {
+        VoxelShape shape = state.getCollisionShape(world, pos);
+        double top = shape.isEmpty() ? 1.0 : shape.getMax(Direction.Axis.Y);
+        return new Vec3d(pos.getX() + 0.5, pos.getY() + top, pos.getZ() + 0.5);
+    }
+
+    /**
+     * Loads a placed suitcase's data from its item and records where its travelers come back out
+     * (on top of a suitcase, in front of a pocket door).
+     */
+    public static void trackPlacedSuitcase(World world, SuitcaseBlockEntity suitcase, ItemStack stack, Vec3d exit) {
         NbtComponent comp = stack.get(DataComponentTypes.BLOCK_ENTITY_DATA);
         if (comp != null) {
             NbtCompound tag = comp.copyNbt();
@@ -88,26 +123,24 @@ public class SuitcaseBlock extends BlockWithEntity {
         }
 
         SuitcaseLocationTracker tracker = SuitcaseLocationTracker.get(world.getServer());
-        if (tracker != null) {
-            tracker.updateSuitcaseLocationFromBlock(
-                    suitcase.getSuitcaseId(),
-                    world.getRegistryKey().getValue().toString(),
-                    pos
-            );
-        }
+        if (tracker == null) return;
+
+        String dimStr = world.getRegistryKey().getValue().toString();
+        tracker.updateSuitcaseLocation(suitcase.getSuitcaseId(), dimStr, exit.x, exit.y, exit.z,
+                SuitcaseLocationTracker.LocationType.BLOCK);
 
         String key = suitcase.getBoundKeystoneName();
         if (key != null) {
-            SuitcaseLocationTracker t = SuitcaseLocationTracker.get(world.getServer());
-            if (t != null) {
-                for (SuitcaseBlockEntity.EnteredPlayerData p : suitcase.getEnteredPlayers()) {
-                    t.updateLocationFromBlock(key, p.uuid,
-                            world.getRegistryKey().getValue().toString(),
-                            suitcase.getSuitcaseId(),
-                            pos, p.yaw, 0f);
-                }
+            for (SuitcaseBlockEntity.EnteredPlayerData p : suitcase.getEnteredPlayers()) {
+                tracker.updateLocation(key, p.uuid, dimStr, suitcase.getSuitcaseId(),
+                        exit.x, exit.y, exit.z, p.yaw, 0f, SuitcaseLocationTracker.LocationType.BLOCK);
             }
         }
+    }
+
+    /** Pocket blocks: suitcases (including the secret barrel and chest) and pocket doors. */
+    public static boolean isPocketBlock(Block block) {
+        return block instanceof SuitcaseBlock || block instanceof PocketDoorBlock;
     }
 
     @Override
@@ -116,39 +149,42 @@ public class SuitcaseBlock extends BlockWithEntity {
         if (!state.isOf(newState.getBlock())) {
             BlockEntity be = world.getBlockEntity(pos);
             if (be instanceof SuitcaseBlockEntity suitcase) {
-
-                ItemStack stack = new ItemStack(this);
-                String key = suitcase.getBoundKeystoneName();
-
-                if (key != null) {
-                    NbtCompound beTag = new NbtCompound();
-
-                    beTag.putString("id", SUITCASE_BE_ID);
-                    beTag.putString("BoundKeystone", key);
-                    beTag.putBoolean("Locked", suitcase.isLocked());
-                    beTag.putBoolean("DimensionLocked", suitcase.isDimensionLocked());
-
-                    beTag.putUuid(SuitcaseBlockEntity.NBT_SUITCASE_ID, suitcase.getSuitcaseId());
-
-                    NbtList entered = new NbtList();
-                    for (SuitcaseBlockEntity.EnteredPlayerData d : suitcase.getEnteredPlayers())
-                        entered.add(d.toNbt());
-                    beTag.put("EnteredPlayers", entered);
-
-                    stack.set(DataComponentTypes.BLOCK_ENTITY_DATA, NbtComponent.of(beTag));
-
-                    List<Text> lore = new ArrayList<>();
-                    lore.add(Text.literal("Bound to: " + (suitcase.isLocked() ? "§k" : "") + key.replace("_", " "))
-                            .formatted(Formatting.GRAY));
-                    lore.add(Text.literal(suitcase.isLocked() ? "§cLocked" : "§aUnlocked")
-                            .formatted(Formatting.GRAY));
-                    stack.set(DataComponentTypes.LORE, new LoreComponent(lore));
-                }
-
-                ItemScatterer.spawn(world, pos.getX(), pos.getY(), pos.getZ(), stack);
+                ItemScatterer.spawn(world, pos.getX(), pos.getY(), pos.getZ(), droppedStack(this, suitcase));
             }
             world.removeBlockEntity(pos);
         }
+    }
+
+    /** The item a broken pocket block drops, carrying its binding, lock and travelers. */
+    public static ItemStack droppedStack(ItemConvertible item, SuitcaseBlockEntity suitcase) {
+        ItemStack stack = new ItemStack(item);
+        String key = suitcase.getBoundKeystoneName();
+
+        if (key != null) {
+            NbtCompound beTag = new NbtCompound();
+
+            beTag.putString("id", SUITCASE_BE_ID);
+            beTag.putString("BoundKeystone", key);
+            beTag.putBoolean("Locked", suitcase.isLocked());
+            beTag.putBoolean("DimensionLocked", suitcase.isDimensionLocked());
+
+            beTag.putUuid(SuitcaseBlockEntity.NBT_SUITCASE_ID, suitcase.getSuitcaseId());
+
+            NbtList entered = new NbtList();
+            for (SuitcaseBlockEntity.EnteredPlayerData d : suitcase.getEnteredPlayers())
+                entered.add(d.toNbt());
+            beTag.put("EnteredPlayers", entered);
+
+            stack.set(DataComponentTypes.BLOCK_ENTITY_DATA, NbtComponent.of(beTag));
+
+            List<Text> lore = new ArrayList<>();
+            lore.add(Text.literal("Bound to: " + (suitcase.isLocked() ? "§k" : "") + key.replace("_", " "))
+                    .formatted(Formatting.GRAY));
+            lore.add(Text.literal(suitcase.isLocked() ? "§cLocked" : "§aUnlocked")
+                    .formatted(Formatting.GRAY));
+            stack.set(DataComponentTypes.LORE, new LoreComponent(lore));
+        }
+        return stack;
     }
 
     private static String sanitize(ItemStack stack) {
@@ -176,18 +212,36 @@ public class SuitcaseBlock extends BlockWithEntity {
             return ItemActionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
         }
 
-        if (!suitcase.canOpenInDimension(world)) {
-            world.playSound(null, pos, SoundEvents.BLOCK_IRON_DOOR_CLOSE, SoundCategory.BLOCKS, .3F, 2F);
-            player.sendMessage(Text.literal("☒").formatted(Formatting.RED), true);
-            return ItemActionResult.SUCCESS;
-        }
+        return useSuitcase(suitcase, held, world, pos, player, state.get(OPEN), opening -> {
+            world.setBlockState(pos, state.with(OPEN, opening));
+            playOpenCloseSound(world, pos, opening);
+        });
+    }
 
+    /**
+     * Whether using a pocket block with this item will just open or close it (rather than use a key on it,
+     * or be refused). The client uses this to open pocket doors right away, as vanilla doors do.
+     */
+    public static boolean willToggle(SuitcaseBlockEntity suitcase, ItemStack held, World world, PlayerEntity player) {
+        return suitcase.canOpenInDimension(world) && !(held.getItem() instanceof KeystoneItem)
+                && (!player.isSneaking() || held.isEmpty())
+                && suitcase.getBoundKeystoneName() != null && !suitcase.isLocked();
+    }
+
+    /**
+     * Using a pocket block: a key binds it or locks/unlocks it, otherwise it opens or closes (when bound
+     * and unlocked). Shared by suitcases and pocket doors, which open in their own way through setOpen.
+     */
+    public static ItemActionResult useSuitcase(SuitcaseBlockEntity suitcase, ItemStack held, World world, BlockPos pos,
+                                               PlayerEntity player, boolean open, Consumer<Boolean> setOpen) {
+        // Inside its own pocket dimension a suitcase can't be opened or locked, only rebound to another name
+        boolean inOwnDimension = !suitcase.canOpenInDimension(world);
         String key = suitcase.getBoundKeystoneName();
 
         if (held.getItem() instanceof KeystoneItem) {
             String name = sanitize(held);
 
-            if (key != null && key.equals(name)) {
+            if (key != null && key.equals(name) && !inOwnDimension) {
                 boolean locked = !suitcase.isLocked();
                 suitcase.setLocked(locked);
                 world.playSound(null, pos,
@@ -203,15 +257,28 @@ public class SuitcaseBlock extends BlockWithEntity {
                 return ItemActionResult.FAIL;
             }
 
-            if (name.equals("item.pocket-repose.keystone")) {
+            if (!held.contains(DataComponentTypes.CUSTOM_NAME)) {
                 player.sendMessage(Text.literal("Name the key to bind.").formatted(Formatting.RED), false);
                 return ItemActionResult.FAIL;
             }
 
             if (!KeystoneItem.isValidKeystone(held)) return ItemActionResult.FAIL;
 
+            // A suitcase can never lead to the pocket dimension it's in
+            if (world.getRegistryKey().getValue().equals(Identifier.of("pocket-repose", "pocket_dimension_" + name))) {
+                world.playSound(null, pos, SoundEvents.BLOCK_IRON_DOOR_CLOSE, SoundCategory.BLOCKS, .3F, 2F);
+                player.sendMessage(Text.literal("☒").formatted(Formatting.RED), true);
+                return ItemActionResult.FAIL;
+            }
+
             suitcase.bindKeystone(name);
             world.playSound(null, pos, SoundEvents.ITEM_LODESTONE_COMPASS_LOCK, SoundCategory.BLOCKS, 2F, 0F);
+            return ItemActionResult.SUCCESS;
+        }
+
+        if (inOwnDimension) {
+            world.playSound(null, pos, SoundEvents.BLOCK_IRON_DOOR_CLOSE, SoundCategory.BLOCKS, .3F, 2F);
+            player.sendMessage(Text.literal("☒").formatted(Formatting.RED), true);
             return ItemActionResult.SUCCESS;
         }
 
@@ -221,21 +288,16 @@ public class SuitcaseBlock extends BlockWithEntity {
                 return ItemActionResult.FAIL;
             }
             if (suitcase.isLocked()) {
+                // Sneaking with an empty hand knocks instead, and the knock is heard inside too
+                if (player.isSneaking() && held.isEmpty()) {
+                    knock(world, player, key);
+                    return ItemActionResult.SUCCESS;
+                }
                 world.playSound(null, pos, SoundEvents.BLOCK_IRON_DOOR_CLOSE, SoundCategory.BLOCKS, .3F, 2F);
                 return ItemActionResult.FAIL;
             }
 
-            boolean open = state.get(OPEN);
-            world.setBlockState(pos, state.with(OPEN, !open));
-
-            world.playSound(null, pos,
-                    open ? SoundEvents.BLOCK_LADDER_BREAK : SoundEvents.BLOCK_LADDER_STEP,
-                    SoundCategory.BLOCKS, .3F, 0F);
-
-            world.playSound(null, pos,
-                    open ? SoundEvents.BLOCK_BAMBOO_WOOD_TRAPDOOR_CLOSE : SoundEvents.BLOCK_CHEST_LOCKED,
-                    SoundCategory.BLOCKS, .3F, open ? 0F : 2F);
-
+            setOpen.accept(!open);
             return ItemActionResult.SUCCESS;
         }
 
@@ -247,7 +309,39 @@ public class SuitcaseBlock extends BlockWithEntity {
         if (world.isClient) return;
         if (!(entity instanceof ServerPlayerEntity player)) return;
         if (!state.get(OPEN) || !player.isSneaking()) return;
+        if (!canEnterFrom(state, world, pos, player)) return;
+        if (recursionBlocked(world, pos, player)) return;
 
+        // Teleporting from inside the movement packet handler makes vanilla re-apply the old movement
+        // afterwards (in survival that puts the player at their old coordinates, but in the pocket
+        // dimension), so the actual entry happens at the end of the server tick
+        PocketTravelHandler.requestEntry(player, (ServerWorld) world, pos);
+    }
+
+    /** Whether a player touching this block is in a position to enter it. Suitcases can be entered from any side. */
+    protected boolean canEnterFrom(BlockState state, World world, BlockPos pos, Entity player) {
+        return true;
+    }
+
+    /**
+     * A knock on a locked pocket block: heard by the person knocking, and (at the knockVolume setting) at the
+     * player entry point inside the pocket dimension it leads to.
+     */
+    private static void knock(World world, PlayerEntity player, String key) {
+        world.playSound(null, player.getX(), player.getY(), player.getZ(),
+                SoundEvents.ENTITY_ZOMBIE_ATTACK_WOODEN_DOOR, SoundCategory.PLAYERS, 0.25F, 1.5F);
+
+        ServerWorld pocket = world.getServer() == null ? null : world.getServer().getWorld(
+                RegistryKey.of(RegistryKeys.WORLD, Identifier.of("pocket-repose", "pocket_dimension_" + key)));
+        if (pocket != null) {
+            Vec3d entry = PlayerEntryData.get(pocket).getEntryPos();
+            pocket.playSound(null, entry.x, entry.y, entry.z,
+                    SoundEvents.ENTITY_ZOMBIE_ATTACK_WOODEN_DOOR, SoundCategory.PLAYERS, PocketRepose.getKnockVolume(), 1.5F);
+        }
+    }
+
+    /** Pocket blocks can't be entered from inside a pocket dimension while allowRecursion is off. */
+    public static boolean recursionBlocked(World world, BlockPos pos, PlayerEntity player) {
         Identifier id = world.getRegistryKey().getValue();
         boolean inPocketDimension =
                 "pocket-repose".equals(id.getNamespace()) &&
@@ -256,20 +350,24 @@ public class SuitcaseBlock extends BlockWithEntity {
         if (inPocketDimension && !PocketRepose.getAllowRecursion()) {
             world.playSound(null, pos, SoundEvents.BLOCK_IRON_DOOR_CLOSE, SoundCategory.BLOCKS, .3F, 2F);
             player.sendMessage(Text.literal("§cSuitcase recursion is disabled"), true);
-            return;
+            return true;
         }
-
-        // Teleporting from inside the movement packet handler makes vanilla re-apply the old movement
-        // afterwards (in survival that puts the player at their old coordinates, but in the pocket
-        // dimension), so the actual entry happens at the end of the server tick
-        PocketTravelHandler.requestEntry(player, (ServerWorld) world, pos);
+        return false;
     }
 
-    /** Sends a player into the pocket dimension of the suitcase at pos, if they can still enter it. */
-    public static void enterSuitcase(ServerPlayerEntity player, ServerWorld world, BlockPos pos) {
+    private static boolean isOpenEntrance(BlockState state) {
+        return (state.getBlock() instanceof SuitcaseBlock && state.get(OPEN))
+                || (state.getBlock() instanceof PocketDoorBlock && state.get(DoorBlock.OPEN));
+    }
+
+    /**
+     * Sends a player into the pocket dimension of the suitcase (or pocket door's lower half) at pos, if they can
+     * still enter it. from is where they stood before walking in: a pocket door lets them back out on that side.
+     */
+    public static void enterSuitcase(ServerPlayerEntity player, ServerWorld world, BlockPos pos, Vec3d from) {
         if (player.getServerWorld() != world || !player.isAlive() || player.isRemoved()) return;
         BlockState state = world.getBlockState(pos);
-        if (!(state.getBlock() instanceof SuitcaseBlock) || !state.get(OPEN)) return;
+        if (!isOpenEntrance(state)) return;
 
         BlockEntity be = world.getBlockEntity(pos);
         if (!(be instanceof SuitcaseBlockEntity suitcase)) return;
@@ -277,7 +375,9 @@ public class SuitcaseBlock extends BlockWithEntity {
         String key = suitcase.getBoundKeystoneName();
         if (key == null) return;
 
-        if (!suitcase.canOpenInDimension(world)) {
+        boolean dimensionAllowed = world.getRegistryKey() == World.NETHER ? PocketRepose.getAllowInNether()
+                : world.getRegistryKey() != World.END || PocketRepose.getAllowInEnd();
+        if (!suitcase.canOpenInDimension(world) || !dimensionAllowed) {
             world.playSound(null, pos, SoundEvents.BLOCK_IRON_DOOR_CLOSE, SoundCategory.BLOCKS, .3F, 2F);
             player.sendMessage(Text.literal("☒").formatted(Formatting.RED), true);
             return;
@@ -302,17 +402,28 @@ public class SuitcaseBlock extends BlockWithEntity {
 
             tracker.setLastSuitcase(key, player.getUuidAsString(), sid);
 
+            // Pocket doors send players back out in front of the doorway, on the side they walked in from;
+            // where they entered would put them straight back into the open doorway
+            Vec3d doorExit = state.getBlock() instanceof PocketDoorBlock door ? door.exitPoint(state, pos, from) : null;
+            Vec3d entry = doorExit != null ? doorExit : player.getPos();
+
             tracker.updateLocation(
                     key,
                     player.getUuidAsString(),
                     dimStr,
                     sid,
-                    player.getX(), player.getY(), player.getZ(),
+                    entry.x, entry.y, entry.z,
                     player.getYaw(), player.getPitch(),
                     SuitcaseLocationTracker.LocationType.ENTRY
             );
 
-            tracker.updateSuitcaseLocationFromBlock(sid, dimStr, pos);
+            if (doorExit != null) {
+                tracker.updateSuitcaseLocation(sid, dimStr, doorExit.x, doorExit.y, doorExit.z,
+                        SuitcaseLocationTracker.LocationType.BLOCK);
+            } else {
+                Vec3d top = exitOnTop(state, world, pos);
+                tracker.updateSuitcaseLocation(sid, dimStr, top.x, top.y, top.z, SuitcaseLocationTracker.LocationType.BLOCK);
+            }
         }
 
         player.stopRiding();
@@ -328,6 +439,30 @@ public class SuitcaseBlock extends BlockWithEntity {
         player.networkHandler.sendPacket(new StopSoundS2CPacket(null, null));
         world.playSound(null, pos.getX() + .5, pos.getY() + .5, pos.getZ() + .5,
                 SoundEvents.ITEM_BUNDLE_DROP_CONTENTS, SoundCategory.PLAYERS, 2F, 1F);
+        // The sound above plays where the player was; play it where they arrive too, so they hear it themselves
+        playTravelSound(player);
+
+        // Locked blocks follow closeOnLockedEntry, unlocked ones closeOnEntry
+        if (suitcase.isLocked() ? PocketRepose.getCloseOnLockedEntry() : PocketRepose.getCloseOnEntry()) {
+            closeBehind(world, pos);
+        }
+    }
+
+    /** The suitcase travel sound, played where the player is now (they can't hear one left in the world they left). */
+    public static void playTravelSound(ServerPlayerEntity player) {
+        player.getServerWorld().playSound(null, player.getX(), player.getY(), player.getZ(),
+                SoundEvents.ITEM_BUNDLE_DROP_CONTENTS, SoundCategory.PLAYERS, 2F, 1F);
+    }
+
+    /** Closes a pocket block behind someone who just went in (closeOnEntry / closeOnLockedEntry). */
+    public static void closeBehind(World world, BlockPos pos) {
+        BlockState state = world.getBlockState(pos);
+        if (state.getBlock() instanceof SuitcaseBlock suitcase && state.get(OPEN)) {
+            world.setBlockState(pos, state.with(OPEN, false));
+            suitcase.playOpenCloseSound(world, pos, false);
+        } else if (state.getBlock() instanceof PocketDoorBlock door) {
+            door.setOpen(null, world, state, pos, false);
+        }
     }
 
 
@@ -342,6 +477,21 @@ public class SuitcaseBlock extends BlockWithEntity {
     }
 
     @Override public BlockRenderType getRenderType(BlockState state) { return BlockRenderType.MODEL; }
+
+    protected void playOpenCloseSound(World world, BlockPos pos, boolean opening) {
+        playSuitcaseSound(world, pos, opening);
+    }
+
+    /** The suitcase's own open and close sounds, which every pocket block and pocket/exit door plays. */
+    public static void playSuitcaseSound(World world, BlockPos pos, boolean opening) {
+        world.playSound(null, pos,
+                opening ? SoundEvents.BLOCK_LADDER_STEP : SoundEvents.BLOCK_LADDER_BREAK,
+                SoundCategory.BLOCKS, .3F, 0F);
+
+        world.playSound(null, pos,
+                opening ? SoundEvents.BLOCK_CHEST_LOCKED : SoundEvents.BLOCK_BAMBOO_WOOD_TRAPDOOR_CLOSE,
+                SoundCategory.BLOCKS, .3F, opening ? 2F : 0F);
+    }
 
     @Override
     public VoxelShape getOutlineShape(BlockState state, BlockView world, BlockPos pos, ShapeContext ctx) {

@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "building",
+  "ingredients": [
+    {
+      "item": "pocket-repose:portal"
+    },
+    {
+      "item": "minecraft:mangrove_door"
+    }
+  ],
+  "result": {
+    "id": "pocket-repose:mangrove_exit_portal_door",
+    "count": 1
+  }
+}
