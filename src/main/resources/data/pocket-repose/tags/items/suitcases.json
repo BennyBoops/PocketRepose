@@ -16,6 +16,18 @@
     "pocket-repose:purple_suitcase",
     "pocket-repose:magenta_suitcase",
     "pocket-repose:pink_suitcase",
-    "pocket-repose:secret_barrel"
+    "pocket-repose:secret_barrel",
+    "pocket-repose:secret_chest",
+    "pocket-repose:oak_pocket_door",
+    "pocket-repose:spruce_pocket_door",
+    "pocket-repose:birch_pocket_door",
+    "pocket-repose:jungle_pocket_door",
+    "pocket-repose:acacia_pocket_door",
+    "pocket-repose:dark_oak_pocket_door",
+    "pocket-repose:mangrove_pocket_door",
+    "pocket-repose:cherry_pocket_door",
+    "pocket-repose:bamboo_pocket_door",
+    "pocket-repose:crimson_pocket_door",
+    "pocket-repose:warped_pocket_door"
   ]
 }

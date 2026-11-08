@@ -1,0 +1,14 @@
+{
+  "parent": "item/generated",
+  "textures": {
+    "layer0": "pocket-repose:item/netherite_key"
+  },
+  "overrides": [
+    {
+      "predicate": {
+        "custom_model_data": 1
+      },
+      "model": "pocket-repose:item/netherite_key_unnamed"
+    }
+  ]
+}

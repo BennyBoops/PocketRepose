@@ -14,6 +14,9 @@
 		"SimpleRegistryMixin",
 		"ShapelessRecipeMixin",
 		"ServerPlayNetworkHandlerMixin",
+		"DimensionsConfigMixin",
+		"DimensionOptionsRegistryHolderInvoker",
+		"PlayerManagerMixin",
 		"ExampleMixin"
 	],
 	"injectors": {

@@ -1,5 +1,7 @@
 package net.bennyboops.modid.mixin;
 
+import net.bennyboops.modid.PocketRepose;
+
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.registry.RegistryKey;
 import net.minecraft.server.network.ServerPlayerEntity;
@@ -19,6 +21,8 @@ public class BedBlockMixin {
     private void preventSpawnSettingInPocketDimensions(RegistryKey<World> dimension,
                                                        BlockPos pos, float angle, boolean forced, boolean sendMessage, CallbackInfo ci) {
         ServerPlayerEntity player = (ServerPlayerEntity) (Object) this;
+        // /pocketRepose allowSpawnPoint lets beds in pocket dimensions set the spawn point
+        if (PocketRepose.getAllowSpawnPoint()) return;
         if (dimension != null &&
                 dimension.getValue().getNamespace().equals("pocket-repose") &&
                 dimension.getValue().getPath().startsWith("pocket_dimension_")) {

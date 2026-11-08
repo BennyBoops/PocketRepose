@@ -1,11 +1,15 @@
 package net.bennyboops.modid;
 
 import com.mojang.brigadier.arguments.BoolArgumentType;
+import com.mojang.brigadier.arguments.FloatArgumentType;
+import net.minecraft.command.CommandSource;
+import net.minecraft.command.argument.IdentifierArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
 import net.bennyboops.modid.block.ModBlocks;
 import net.bennyboops.modid.block.PocketTravelHandler;
+import net.bennyboops.modid.block.PocketPortalBlock;
 import net.bennyboops.modid.block.SuitcaseBlock;
 import net.bennyboops.modid.block.entity.ModBlockEntities;
 import net.bennyboops.modid.block.entity.SuitcaseBlockEntity;
@@ -68,9 +72,16 @@ import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
 import net.minecraft.world.biome.Biome;
+import net.minecraft.world.biome.source.MultiNoiseBiomeSource;
+import net.minecraft.world.biome.source.MultiNoiseBiomeSourceParameterLists;
 import net.minecraft.world.chunk.WorldChunk;
 import net.minecraft.world.dimension.DimensionType;
+import net.minecraft.world.dimension.DimensionTypes;
 import net.minecraft.world.gen.chunk.ChunkGenerator;
+import net.minecraft.world.gen.chunk.ChunkGeneratorSettings;
+import net.minecraft.world.gen.chunk.NoiseChunkGenerator;
+import net.minecraft.util.math.random.RandomSeed;
+import net.minecraft.network.packet.s2c.play.PlayerSpawnPositionS2CPacket;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,6 +89,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 
 public class PocketRepose implements ModInitializer {
 
@@ -135,7 +148,10 @@ public class PocketRepose implements ModInitializer {
 				for (String dimName : Files.readAllLines(registryFile)) {
 					if (dimName.isBlank()) continue;
 					Identifier worldId = new Identifier("pocket-repose", dimName.trim());
-					Fantasy.get(server).getOrOpenPersistentWorld(worldId, createPocketWorldConfig(server));
+					RuntimeWorldConfig config = KeystoneItem.isWorldDimension(server, dimName.trim())
+							? createWorldDimensionConfig(server)
+							: createPocketWorldConfig(server);
+					Fantasy.get(server).getOrOpenPersistentWorld(worldId, config);
 				}
 			} catch (IOException e) {
 				LOGGER.error("Failed to reload pocket dimensions", e);
@@ -146,7 +162,7 @@ public class PocketRepose implements ModInitializer {
 			if (!(newEntity instanceof ItemEntity itemEntity)) return;
 
 			ItemStack stack = itemEntity.getStack();
-			if (!(stack.getItem() instanceof BlockItem bi) || !(bi.getBlock() instanceof SuitcaseBlock)) return;
+			if (!(stack.getItem() instanceof BlockItem bi) || !SuitcaseBlock.isPocketBlock(bi.getBlock())) return;
 
 			NbtCompound beData = StackData.getBlockEntityData(stack);
 			if (beData == null) return;
@@ -240,7 +256,7 @@ public class PocketRepose implements ModInitializer {
 								ItemStack st = itemEntity.getStack();
 								if (st.isEmpty()) return false;
 
-								if (st.getItem() instanceof BlockItem b && b.getBlock() instanceof SuitcaseBlock) return true;
+								if (st.getItem() instanceof BlockItem b && SuitcaseBlock.isPocketBlock(b.getBlock())) return true;
 
 								return StackData.hasContainedStacks(st);
 							}
@@ -321,7 +337,7 @@ public class PocketRepose implements ModInitializer {
 
 			if (stack.isEmpty()) continue;
 
-			if (!(stack.getItem() instanceof BlockItem bi) || !(bi.getBlock() instanceof SuitcaseBlock)) continue;
+			if (!(stack.getItem() instanceof BlockItem bi) || !SuitcaseBlock.isPocketBlock(bi.getBlock())) continue;
 
 			NbtCompound beData = StackData.getBlockEntityData(stack);
 			if (beData == null) continue;
@@ -372,7 +388,7 @@ public class PocketRepose implements ModInitializer {
 
 		if (stack.isEmpty()) return;
 		if (!(stack.getItem() instanceof BlockItem bi)) return;
-		if (!(bi.getBlock() instanceof SuitcaseBlock)) return;
+		if (!SuitcaseBlock.isPocketBlock(bi.getBlock())) return;
 
 		NbtCompound beData = StackData.getBlockEntityData(stack);
 		if (beData == null) return;
@@ -424,7 +440,7 @@ public class PocketRepose implements ModInitializer {
 	private static void updateSuitcaseLocation(SuitcaseLocationTracker tracker, ItemStack stack, ServerWorld world, double x, double y, double z, float yaw, float pitch) {
 
 		if (stack.isEmpty() || !(stack.getItem() instanceof BlockItem bi)
-				|| !(bi.getBlock() instanceof SuitcaseBlock)) {
+				|| !SuitcaseBlock.isPocketBlock(bi.getBlock())) {
 			return;
 		}
 
@@ -484,6 +500,42 @@ public class PocketRepose implements ModInitializer {
 				.setMirrorOverworldDifficulty(true)
 				.setMirrorOverworldTimeAndWeather(true);
 	}
+
+	/** A World Key dimension: normal overworld terrain and biomes (to be replaced by its own biomes later). */
+	public static RuntimeWorldConfig createWorldDimensionConfig(MinecraftServer server) {
+		var registries = server.getRegistryManager();
+		var biomes = MultiNoiseBiomeSource.create(registries.get(RegistryKeys.MULTI_NOISE_BIOME_SOURCE_PARAMETER_LIST)
+				.entryOf(MultiNoiseBiomeSourceParameterLists.OVERWORLD));
+		var settings = registries.get(RegistryKeys.CHUNK_GENERATOR_SETTINGS).entryOf(ChunkGeneratorSettings.OVERWORLD);
+		return new RuntimeWorldConfig()
+				.setDimensionType(DimensionTypes.OVERWORLD)
+				.setGenerator(new NoiseChunkGenerator(biomes, settings))
+				.setSeed(server.getOverworld().getSeed())
+				.setShouldTickTime(false)
+				.setMirrorOverworldGameRules(true)
+				.setMirrorOverworldDifficulty(true)
+				.setMirrorOverworldTimeAndWeather(true);
+	}
+
+	/** Where compasses point: a pocket dimension's player entry point, otherwise the world spawn. */
+	public static BlockPos compassTarget(ServerWorld world) {
+		if (!MOD_ID.equals(world.getRegistryKey().getValue().getNamespace())) return world.getSpawnPos();
+		return BlockPos.ofFloored(PlayerEntryData.get(world).getEntryPos());
+	}
+
+	/** Re-sends the compass target to the players in a pocket dimension after its entry point moves. */
+	public static void updateCompasses(ServerWorld world) {
+		PlayerSpawnPositionS2CPacket packet = new PlayerSpawnPositionS2CPacket(compassTarget(world), world.getSpawnAngle());
+		for (ServerPlayerEntity player : world.getPlayers()) player.networkHandler.sendPacket(packet);
+	}
+
+	/**
+	 * Each pocket dimension gets its own seed, derived from the world seed and the dimension's name,
+	 * so World Key dimensions don't generate the same terrain as the overworld or as each other.
+	 */
+	public static long pocketSeed(long worldSeed, String dimensionPath) {
+		return RandomSeed.mixStafford13(worldSeed ^ (long) dimensionPath.hashCode() * 0x9E3779B97F4A7C15L);
+	}
 	public static final RegistryKey<Biome> VOID_BIOME_KEY =
 			RegistryKey.of(RegistryKeys.BIOME, new Identifier("pocket-repose", "pocket_islands"));
 	private void registerPocketCommands() {
@@ -530,6 +582,7 @@ public class PocketRepose implements ModInitializer {
 										float pitch = src.getRotation().x;
 
 										PlayerEntryData.get(world).setEntry(pos, yaw, pitch);
+										updateCompasses(world);
 										src.sendFeedback(() -> Text.literal(
 												String.format("§aPlayer entry set to %.2f, %.2f, %.2f", pos.x, pos.y, pos.z)
 										), false);
@@ -537,7 +590,7 @@ public class PocketRepose implements ModInitializer {
 									})
 							)
 
-							// reset entry helper (kept from your original)
+							// Resets a pocket dimension's player entry point (operators)
 							.then(CommandManager.literal("resetPlayerEntry")
 									.requires(src -> src.hasPermissionLevel(2))
 									.then(CommandManager.argument("dimension", StringArgumentType.word())
@@ -545,217 +598,245 @@ public class PocketRepose implements ModInitializer {
 									)
 							)
 
-							// list dimensions
-							.then(CommandManager.literal("listDimensions")
+							// Whether pocket blocks close behind players who enter them (operators)
+							.then(booleanSetting("closeOnEntry",
+									PocketRepose::getCloseOnEntry, PocketRepose::setCloseOnEntry,
+									"Unlocked pocket blocks closing behind players who enter")
+									.requires(src -> src.hasPermissionLevel(2)))
+							.then(booleanSetting("closeOnLockedEntry",
+									PocketRepose::getCloseOnLockedEntry, PocketRepose::setCloseOnLockedEntry,
+									"Locked pocket blocks closing behind players who enter")
+									.requires(src -> src.hasPermissionLevel(2)))
+
+							// Exit Keystone settings (operators)
+							.then(CommandManager.literal("exitKeystone")
 									.requires(src -> src.hasPermissionLevel(2))
-									.executes(ctx -> {
-										ServerCommandSource src = ctx.getSource();
-										src.sendFeedback(() -> Text.literal("§aPocket Dimensions Loaded:"), false);
-										boolean foundAny = false;
-										for (ServerWorld world : src.getServer().getWorlds()) {
-											Identifier id = world.getRegistryKey().getValue();
-											String namespace = id.getNamespace();
-											String path = id.getPath();
-											String prefix = "pocket_dimension_";
-
-											if ("pocket-repose".equals(namespace) && path.startsWith(prefix)) {
-												String suffix = path.substring(prefix.length());
-												src.sendFeedback(() -> Text.literal(" " + suffix), false);
-												foundAny = true;
-											}
-										}
-										if (!foundAny) {
-											src.sendFeedback(() -> Text.literal("§cNo pocket dimensions found."), false);
-										}
-										return 1;
-									})
-							)
-
-							// canCaptureHostile true/false
-							.then(CommandManager.literal("canCaptureHostile")
-									.requires(src -> src.hasPermissionLevel(2))
-									.then(CommandManager.argument("value", BoolArgumentType.bool())
-											.executes(ctx -> {
-												boolean value = BoolArgumentType.getBool(ctx, "value");
-												setCanCaptureHostile(value);
-												ServerCommandSource src = ctx.getSource();
-												PocketReposeSettingsData.onSettingsChanged(src.getServer());
-												src.sendFeedback(() -> Text.literal(
-														value ? "§aHostile mob capture enabled" : "§cHostile mob capture disabled"
-												), false);
-												return 1;
-											})
-									)
-									.executes(ctx -> {
-										ServerCommandSource src = ctx.getSource();
-										boolean current = getCanCaptureHostile();
-										src.sendFeedback(() -> Text.literal(
-												"§7Hostile mob capture is currently: " + (current ? "§aEnabled" : "§cDisabled")
-										), false);
-										return 1;
-									})
-							)
-
-							// spawnIsland true/false
-							.then(CommandManager.literal("spawnIsland")
-									.requires(src -> src.hasPermissionLevel(2))
-									.then(CommandManager.argument("value", BoolArgumentType.bool())
-											.executes(ctx -> {
-												boolean value = BoolArgumentType.getBool(ctx, "value");
-												setSpawnIsland(value);
-												ServerCommandSource src = ctx.getSource();
-												PocketReposeSettingsData.onSettingsChanged(src.getServer());
-												src.sendFeedback(() -> Text.literal(
-														value ? "§aIsland structure spawning enabled" : "§cIsland structure spawning disabled (grass cube will spawn)"
-												), false);
-												return 1;
-											})
-									)
-									.executes(ctx -> {
-										ServerCommandSource src = ctx.getSource();
-										boolean current = getSpawnIsland();
-										src.sendFeedback(() -> Text.literal(
-												"§7Island structure spawning is currently: " + (current ? "§aEnabled" : "§cDisabled")
-										), false);
-										return 1;
-									})
-							)
-
-							// mob blacklist group
-							.then(CommandManager.literal("mobBlacklist")
-									.requires(src -> src.hasPermissionLevel(2))
-
-									.then(CommandManager.literal("add")
-											.then(CommandManager.argument("entity", StringArgumentType.string())
+									.then(CommandManager.literal("setCooldown")
+											.then(CommandManager.argument("seconds", FloatArgumentType.floatArg(0, 600))
 													.executes(ctx -> {
+														float seconds = FloatArgumentType.getFloat(ctx, "seconds");
+														setExitKeystoneCooldown(seconds);
 														ServerCommandSource src = ctx.getSource();
-														String entityString = StringArgumentType.getString(ctx, "entity");
+														PocketReposeSettingsData.onSettingsChanged(src.getServer());
+														src.sendFeedback(() -> Text.literal("Exit Keystone cooldown: §a" + seconds + " seconds"), false);
+														return 1;
+													}))
+											.executes(ctx -> {
+												float current = getExitKeystoneCooldown();
+												ctx.getSource().sendFeedback(() -> Text.literal("§7Exit Keystone cooldown is currently: §a" + current + " seconds"), false);
+												return 1;
+											}))
+									.then(booleanSetting("worksInOverworld",
+											PocketRepose::getExitKeystoneInOverworld, PocketRepose::setExitKeystoneInOverworld,
+											"Exit Keystone returning players to spawn from the Overworld"))
+									.then(booleanSetting("worksInNether",
+											PocketRepose::getExitKeystoneInNether, PocketRepose::setExitKeystoneInNether,
+											"Exit Keystone returning players to spawn from the Nether"))
+									.then(booleanSetting("worksInEnd",
+											PocketRepose::getExitKeystoneInEnd, PocketRepose::setExitKeystoneInEnd,
+											"Exit Keystone returning players to spawn from the End"))
+							)
 
-														try {
-															Identifier entityId = new Identifier(entityString);
-															Optional<EntityType<?>> found = Registries.ENTITY_TYPE.getOrEmpty(entityId);
-
-															if (found.isEmpty()) {
-																src.sendError(Text.literal("§cUnknown entity type: " + entityString));
-																return 0;
-															}
-															EntityType<?> entityType = found.get();
-
-															if (entityType == EntityType.PLAYER) {
-																src.sendError(Text.literal("§cCannot blacklist players"));
-																return 0;
-															}
-
-															addToBlacklist(entityType);
-															PocketReposeSettingsData.onSettingsChanged(src.getServer());
-															src.sendFeedback(() -> Text.literal(
-																	"§aAdded " + entityId + " to blacklist"
-															), false);
-															return 1;
-														} catch (Exception e) {
-															src.sendError(Text.literal("§cInvalid entity identifier: " + entityString));
-															return 0;
-														}
-													})
-											)
-									)
-
-									.then(CommandManager.literal("remove")
-											.then(CommandManager.argument("entity", StringArgumentType.string())
-													.executes(ctx -> {
-														ServerCommandSource src = ctx.getSource();
-														String entityString = StringArgumentType.getString(ctx, "entity");
-
-														try {
-															Identifier entityId = new Identifier(entityString);
-															Optional<EntityType<?>> found = Registries.ENTITY_TYPE.getOrEmpty(entityId);
-
-															if (found.isEmpty()) {
-																src.sendError(Text.literal("§cUnknown entity type: " + entityString));
-																return 0;
-															}
-															EntityType<?> entityType = found.get();
-
-															boolean removed = removeFromBlacklist(entityType);
-															PocketReposeSettingsData.onSettingsChanged(src.getServer());
-															if (removed) {
-																src.sendFeedback(() -> Text.literal(
-																		"§aRemoved " + entityId + " from blacklist"
-																), false);
-															} else {
-																src.sendFeedback(() -> Text.literal(
-																		"§7" + entityId + " was not in blacklist"
-																), false);
-															}
-															return 1;
-														} catch (Exception e) {
-															src.sendError(Text.literal("§cInvalid entity identifier: " + entityString));
-															return 0;
-														}
-													})
-											)
-									)
+							// Pocket dimension settings and tools (operators)
+							.then(CommandManager.literal("pocketDimensions")
+									.requires(src -> src.hasPermissionLevel(2))
 
 									.then(CommandManager.literal("list")
 											.executes(ctx -> {
 												ServerCommandSource src = ctx.getSource();
-												Set<EntityType<?>> blacklist = getEntityBlacklist();
+												src.sendFeedback(() -> Text.literal("§aPocket Dimensions Loaded:"), false);
+												boolean foundAny = false;
+												for (ServerWorld world : src.getServer().getWorlds()) {
+													Identifier id = world.getRegistryKey().getValue();
+													String namespace = id.getNamespace();
+													String path = id.getPath();
+													String prefix = "pocket_dimension_";
 
-												if (blacklist.isEmpty()) {
-													src.sendFeedback(() -> Text.literal("§7No entities are blacklisted"), false);
-												} else {
-													src.sendFeedback(() -> Text.literal("§aBlacklisted entities:"), false);
-													blacklist.forEach(entityType -> {
-														Identifier id = Registries.ENTITY_TYPE.getId(entityType);
-														src.sendFeedback(() -> Text.literal(" " + id), false);
-													});
+													if ("pocket-repose".equals(namespace) && path.startsWith(prefix)) {
+														String suffix = path.substring(prefix.length());
+														src.sendFeedback(() -> Text.literal(" " + suffix), false);
+														foundAny = true;
+													}
+												}
+												if (!foundAny) {
+													src.sendFeedback(() -> Text.literal("§cNo pocket dimensions found."), false);
 												}
 												return 1;
 											})
 									)
 
-									.then(CommandManager.literal("clear")
+									.then(booleanSetting("allowRecursion",
+											PocketRepose::getAllowRecursion, PocketRepose::setAllowRecursion,
+											"Entering pocket blocks from inside pocket dimensions"))
+									.then(booleanSetting("allowSetSpawnPoint",
+											PocketRepose::getAllowSpawnPoint, PocketRepose::setAllowSpawnPoint,
+											"Setting spawn points with beds in pocket dimensions"))
+									.then(booleanSetting("allowHostileMobCapture",
+											PocketRepose::getCanCaptureHostile, PocketRepose::setCanCaptureHostile,
+											"Capturing hostile mobs"))
+									.then(booleanSetting("allowPassiveMobCapture",
+											PocketRepose::getCanCapturePassive, PocketRepose::setCanCapturePassive,
+											"Capturing passive mobs"))
+									.then(booleanSetting("allowHostileMobSpawning",
+											PocketRepose::getHostileMobSpawning, PocketRepose::setHostileMobSpawning,
+											"Hostile mob spawning in pocket dimensions"))
+									.then(booleanSetting("allowPassiveMobSpawning",
+											PocketRepose::getPassiveMobSpawning, PocketRepose::setPassiveMobSpawning,
+											"Passive mob spawning in pocket dimensions"))
+									.then(booleanSetting("allowInNether",
+											PocketRepose::getAllowInNether, PocketRepose::setAllowInNether,
+											"Entering pocket blocks in the Nether"))
+									.then(booleanSetting("allowInEnd",
+											PocketRepose::getAllowInEnd, PocketRepose::setAllowInEnd,
+											"Entering pocket blocks in the End"))
+									.then(booleanSetting("spawnIsland",
+											PocketRepose::getSpawnIsland, PocketRepose::setSpawnIsland,
+											"Island structures in new pocket dimensions"))
+									.then(CommandManager.literal("setKnockVolume")
+											.then(CommandManager.argument("volume", FloatArgumentType.floatArg(0, 10))
+													.executes(ctx -> {
+														float volume = FloatArgumentType.getFloat(ctx, "volume");
+														setKnockVolume(volume);
+														ServerCommandSource src = ctx.getSource();
+														PocketReposeSettingsData.onSettingsChanged(src.getServer());
+														src.sendFeedback(() -> Text.literal("Knock volume inside pocket dimensions: §a" + volume), false);
+														return 1;
+													}))
 											.executes(ctx -> {
-												ServerCommandSource src = ctx.getSource();
-												int count = getEntityBlacklist().size();
-												clearBlacklist();
-												PocketReposeSettingsData.onSettingsChanged(src.getServer());
-												src.sendFeedback(() -> Text.literal(
-														"§aCleared blacklist (removed " + count + " entities)"
-												), false);
+												float current = getKnockVolume();
+												ctx.getSource().sendFeedback(() -> Text.literal("§7Knock volume inside pocket dimensions is currently: §a" + current), false);
 												return 1;
-											})
+											}))
+
+									.then(CommandManager.literal("captureBlacklist")
+											.then(CommandManager.literal("add")
+													.then(CommandManager.argument("entity", IdentifierArgumentType.identifier())
+															.suggests((ctx, builder) -> CommandSource.suggestIdentifiers(Registries.ENTITY_TYPE.getIds(), builder))
+															.executes(ctx -> {
+																ServerCommandSource src = ctx.getSource();
+																String entityString = IdentifierArgumentType.getIdentifier(ctx, "entity").toString();
+
+																try {
+																	Identifier entityId = new Identifier(entityString);
+																	Optional<EntityType<?>> found = Registries.ENTITY_TYPE.getOrEmpty(entityId);
+
+																	if (found.isEmpty()) {
+																		src.sendError(Text.literal("§cUnknown entity type: " + entityString));
+																		return 0;
+																	}
+																	EntityType<?> entityType = found.get();
+
+																	if (entityType == EntityType.PLAYER) {
+																		src.sendError(Text.literal("§cCannot blacklist players"));
+																		return 0;
+																	}
+
+																	addToBlacklist(entityType);
+																	PocketReposeSettingsData.onSettingsChanged(src.getServer());
+																	src.sendFeedback(() -> Text.literal(
+																			"§aAdded " + entityId + " to blacklist"
+																	), false);
+																	return 1;
+																} catch (Exception e) {
+																	src.sendError(Text.literal("§cInvalid entity identifier: " + entityString));
+																	return 0;
+																}
+															})
+													)
+											)
+
+											.then(CommandManager.literal("remove")
+													.then(CommandManager.argument("entity", IdentifierArgumentType.identifier())
+															.suggests((ctx, builder) -> CommandSource.suggestIdentifiers(Registries.ENTITY_TYPE.getIds(), builder))
+															.executes(ctx -> {
+																ServerCommandSource src = ctx.getSource();
+																String entityString = IdentifierArgumentType.getIdentifier(ctx, "entity").toString();
+
+																try {
+																	Identifier entityId = new Identifier(entityString);
+																	Optional<EntityType<?>> found = Registries.ENTITY_TYPE.getOrEmpty(entityId);
+
+																	if (found.isEmpty()) {
+																		src.sendError(Text.literal("§cUnknown entity type: " + entityString));
+																		return 0;
+																	}
+																	EntityType<?> entityType = found.get();
+
+																	boolean removed = removeFromBlacklist(entityType);
+																	PocketReposeSettingsData.onSettingsChanged(src.getServer());
+																	if (removed) {
+																		src.sendFeedback(() -> Text.literal(
+																				"§aRemoved " + entityId + " from blacklist"
+																		), false);
+																	} else {
+																		src.sendFeedback(() -> Text.literal(
+																				"§7" + entityId + " was not in blacklist"
+																		), false);
+																	}
+																	return 1;
+																} catch (Exception e) {
+																	src.sendError(Text.literal("§cInvalid entity identifier: " + entityString));
+																	return 0;
+																}
+															})
+													)
+											)
+
+											.then(CommandManager.literal("list")
+													.executes(ctx -> {
+														ServerCommandSource src = ctx.getSource();
+														Set<EntityType<?>> blacklist = getEntityBlacklist();
+
+														if (blacklist.isEmpty()) {
+															src.sendFeedback(() -> Text.literal("§7No entities are blacklisted"), false);
+														} else {
+															src.sendFeedback(() -> Text.literal("§aBlacklisted entities:"), false);
+															blacklist.forEach(entityType -> {
+																Identifier id = Registries.ENTITY_TYPE.getId(entityType);
+																src.sendFeedback(() -> Text.literal(" " + id), false);
+															});
+														}
+														return 1;
+													})
+											)
+
+											.then(CommandManager.literal("clear")
+													.executes(ctx -> {
+														ServerCommandSource src = ctx.getSource();
+														int count = getEntityBlacklist().size();
+														clearBlacklist();
+														PocketReposeSettingsData.onSettingsChanged(src.getServer());
+														src.sendFeedback(() -> Text.literal(
+																"§aCleared blacklist (removed " + count + " entities)"
+														), false);
+														return 1;
+													})
+											)
 									)
 							)
-
-							// allowRecursion true/false
-							.then(CommandManager.literal("allowRecursion")
-									.requires(src -> src.hasPermissionLevel(2))
-									.then(CommandManager.argument("value", BoolArgumentType.bool())
-											.executes(ctx -> {
-												boolean value = BoolArgumentType.getBool(ctx, "value");
-												setAllowRecursion(value);
-
-												ServerCommandSource src = ctx.getSource();
-												PocketReposeSettingsData.onSettingsChanged(src.getServer());
-												src.sendFeedback(() -> Text.literal(
-														value ? "§aSuitcase recursion enabled" : "§cSuitcase recursion disabled"
-												), false);
-												return 1;
-											})
-									)
-									.executes(ctx -> {
-										ServerCommandSource src = ctx.getSource();
-										boolean current = getAllowRecursion();
-										src.sendFeedback(() -> Text.literal(
-												"§7Suitcase recursion is currently: " + (current ? "§aEnabled" : "§cDisabled")
-										), false);
-										return 1;
-									})
-							)
-
 			);
 		});
+	}
+
+	/** An on/off setting: "<name> true|false" sets it, "<name>" alone shows it. Saved with the world. */
+	private static LiteralArgumentBuilder<ServerCommandSource> booleanSetting(String name, BooleanSupplier getter,
+																			 Consumer<Boolean> setter, String label) {
+		return CommandManager.literal(name)
+				.then(CommandManager.argument("value", BoolArgumentType.bool())
+						.executes(ctx -> {
+							boolean value = BoolArgumentType.getBool(ctx, "value");
+							setter.accept(value);
+							ServerCommandSource src = ctx.getSource();
+							PocketReposeSettingsData.onSettingsChanged(src.getServer());
+							src.sendFeedback(() -> Text.literal(label + ": " + (value ? "§aEnabled" : "§cDisabled")), false);
+							return 1;
+						}))
+				.executes(ctx -> {
+					boolean current = getter.getAsBoolean();
+					ctx.getSource().sendFeedback(() -> Text.literal("§7" + label + " is currently: "
+							+ (current ? "§aEnabled" : "§cDisabled")), false);
+					return 1;
+				});
 	}
 	private int resetPocketDimension(CommandContext<ServerCommandSource> ctx, String dimSuffix) {
 		ServerCommandSource src = ctx.getSource();
@@ -782,6 +863,7 @@ public class PocketRepose implements ModInitializer {
 
 		PlayerEntryData playerData = PlayerEntryData.get(targetWorld);
 		playerData.setEntry(new Vec3d(17.5, 97.0, 9.5), 0f, 0f);
+		updateCompasses(targetWorld);
 
 		src.sendFeedback(() -> Text.literal("§aPocket dimension '" + dimSuffix + "' entry reset"), false);
 		return 1;
@@ -802,6 +884,7 @@ public class PocketRepose implements ModInitializer {
 			float yaw = player.getYaw();
 			float pitch = player.getPitch();
 			PlayerEntryData.get(sw).setEntry(pos, yaw, pitch);
+			updateCompasses(sw);
 
 			player.sendMessage(Text.literal(
 					String.format("§aPlayer entry location set to %.1f, %.1f, %.1f", pos.x, pos.y, pos.z)
@@ -843,6 +926,99 @@ public class PocketRepose implements ModInitializer {
 	private static boolean canCaptureHostile = false;
 	private static boolean spawnIsland = true;
 	private static boolean allowRecursion = true;
+	private static boolean hostileMobSpawning = false;
+	private static boolean passiveMobSpawning = true;
+	private static boolean allowSpawnPoint = false;
+	private static boolean exitKeystoneInOverworld = false;
+	// Seconds before the Exit Keystone can be used again
+	private static float exitKeystoneCooldown = 1.0F;
+	public static float getExitKeystoneCooldown() {
+		return exitKeystoneCooldown;
+	}
+	public static void setExitKeystoneCooldown(float seconds) {
+		exitKeystoneCooldown = seconds;
+	}
+	private static boolean exitKeystoneInNether = true;
+	private static boolean exitKeystoneInEnd = true;
+	private static boolean canCapturePassive = true;
+	private static boolean allowInNether = true;
+	private static boolean allowInEnd = true;
+	private static boolean closeOnEntry = false;
+	private static boolean closeOnLockedEntry = true;
+	public static boolean getCloseOnLockedEntry() {
+		return closeOnLockedEntry;
+	}
+	public static void setCloseOnLockedEntry(boolean value) {
+		closeOnLockedEntry = value;
+	}
+	public static boolean getCloseOnEntry() {
+		return closeOnEntry;
+	}
+	public static void setCloseOnEntry(boolean value) {
+		closeOnEntry = value;
+	}
+	// How loud a knock on a locked pocket block is inside the pocket dimension
+	private static float knockVolume = 0.5F;
+	public static float getKnockVolume() {
+		return knockVolume;
+	}
+	public static void setKnockVolume(float value) {
+		knockVolume = value;
+	}
+	public static boolean getExitKeystoneInOverworld() {
+		return exitKeystoneInOverworld;
+	}
+	public static void setExitKeystoneInOverworld(boolean value) {
+		exitKeystoneInOverworld = value;
+	}
+	public static boolean getExitKeystoneInNether() {
+		return exitKeystoneInNether;
+	}
+	public static void setExitKeystoneInNether(boolean value) {
+		exitKeystoneInNether = value;
+	}
+	public static boolean getExitKeystoneInEnd() {
+		return exitKeystoneInEnd;
+	}
+	public static void setExitKeystoneInEnd(boolean value) {
+		exitKeystoneInEnd = value;
+	}
+	public static boolean getCanCapturePassive() {
+		return canCapturePassive;
+	}
+	public static void setCanCapturePassive(boolean value) {
+		canCapturePassive = value;
+	}
+	public static boolean getAllowInNether() {
+		return allowInNether;
+	}
+	public static void setAllowInNether(boolean value) {
+		allowInNether = value;
+	}
+	public static boolean getAllowInEnd() {
+		return allowInEnd;
+	}
+	public static void setAllowInEnd(boolean value) {
+		allowInEnd = value;
+	}
+	public static boolean getHostileMobSpawning() {
+		return hostileMobSpawning;
+	}
+	public static void setHostileMobSpawning(boolean value) {
+		hostileMobSpawning = value;
+	}
+	public static boolean getPassiveMobSpawning() {
+		return passiveMobSpawning;
+	}
+	public static void setPassiveMobSpawning(boolean value) {
+		passiveMobSpawning = value;
+	}
+	public static boolean getAllowSpawnPoint() {
+		return allowSpawnPoint;
+	}
+	public static void setAllowSpawnPoint(boolean value) {
+		allowSpawnPoint = value;
+	}
 	public static boolean getAllowRecursion() {
 		return allowRecursion;
 	}
@@ -881,6 +1057,19 @@ public class PocketRepose implements ModInitializer {
 		canCaptureHostile = false;
 		spawnIsland = true;
 		allowRecursion = true;
+		hostileMobSpawning = false;
+		passiveMobSpawning = true;
+		allowSpawnPoint = false;
+		exitKeystoneInOverworld = false;
+		exitKeystoneCooldown = 1.0F;
+		exitKeystoneInNether = true;
+		exitKeystoneInEnd = true;
+		canCapturePassive = true;
+		allowInNether = true;
+		allowInEnd = true;
+		knockVolume = 0.5F;
+		closeOnEntry = false;
+		closeOnLockedEntry = true;
 		entityBlacklist.clear();
 	}
 	private boolean isHostileMob(LivingEntity mob) {
@@ -901,7 +1090,7 @@ public class PocketRepose implements ModInitializer {
 			if (!(stack.getItem() instanceof BlockItem bi)) return ActionResult.PASS;
 
 			Block heldBlock = bi.getBlock();
-			if (!(heldBlock instanceof SuitcaseBlock)) return ActionResult.PASS;
+			if (!SuitcaseBlock.isPocketBlock(heldBlock)) return ActionResult.PASS;
 
 			if (entity instanceof PlayerEntity) {
 				player.sendMessage(Text.literal("☒"), true);
@@ -972,7 +1161,7 @@ public class PocketRepose implements ModInitializer {
 				return ActionResult.FAIL;
 			}
 
-			if (!canCaptureHostile && isHostileMob(mob)) {
+			if (isHostileMob(mob) ? !canCaptureHostile : !canCapturePassive) {
 				player.sendMessage(Text.literal("☒"), true);
 				world.playSound(null,
 						player.getX(), player.getY(), player.getZ(),
@@ -1057,53 +1246,10 @@ public class PocketRepose implements ModInitializer {
 			SuitcaseLocationTracker tracker = SuitcaseLocationTracker.get(server);
 			String playerUuid = sp.getUuidAsString();
 
-			UUID expectedSuitcaseId = (tracker == null) ? null : tracker.getLastSuitcase(keystoneName, playerUuid);
-
-			boolean teleported = false;
-			ServerWorld targetWorldUsed = null;
-			Vec3d targetPosUsed = null;
-
-			if (tracker != null) {
-				SuitcaseLocationTracker.LocationData loc = tracker.getLocation(keystoneName, playerUuid);
-				if (loc != null && loc.type != SuitcaseLocationTracker.LocationType.DESTROYED) {
-
-					if (expectedSuitcaseId == null || (loc.suitcaseId != null && expectedSuitcaseId.equals(loc.suitcaseId))) {
-						ServerWorld target = worldFromId(server, loc.dimensionId);
-						if (target != null) {
-							Vec3d dest = new Vec3d(loc.x, loc.y, loc.z);
-							if (teleportMobTo(mob, target, dest)) {
-								teleported = true;
-								targetWorldUsed = target;
-								targetPosUsed = dest;
-							}
-						}
-					}
-				}
-			}
-
-			if (!teleported && expectedSuitcaseId != null) {
-				TeleportResult res = findSuitcaseAndTeleportMob(server, mob, keystoneName, expectedSuitcaseId);
-				if (res.success) {
-					teleported = true;
-					targetWorldUsed = res.world;
-					targetPosUsed = res.pos;
-				}
-			}
-
-			if (!teleported && tracker != null) {
-				SuitcaseLocationTracker.LocationData loc = tracker.getLocation(keystoneName, playerUuid);
-				if (loc != null) {
-					ServerWorld target = worldFromId(server, loc.dimensionId);
-					if (target != null) {
-						Vec3d dest = new Vec3d(loc.x, loc.y, loc.z);
-						if (teleportMobTo(mob, target, dest)) {
-							teleported = true;
-							targetWorldUsed = target;
-							targetPosUsed = dest;
-						}
-					}
-				}
-			}
+			TeleportResult res = sendMobOut(server, sp.getServerWorld(), mob, keystoneName, playerUuid);
+			boolean teleported = res.success;
+			ServerWorld targetWorldUsed = res.world;
+			Vec3d targetPosUsed = res.pos;
 
 			if (!teleported) {
 				sp.sendMessage(Text.literal("§cNo suitcase exit found for mob"), true);
@@ -1130,6 +1276,98 @@ public class PocketRepose implements ModInitializer {
 
 			return ActionResult.SUCCESS;
 		});
+	}
+	/**
+	 * Sends a mob out of a pocket dimension to where the given player would come back out, checked in the
+	 * same order as for players, and never anywhere inside the pocket dimension being left (a suitcase bound
+	 * to it can be carried or placed in it).
+	 */
+	private static TeleportResult sendMobOut(MinecraftServer server, ServerWorld pocketWorld, LivingEntity mob,
+											 String keystoneName, String playerUuid) {
+		SuitcaseLocationTracker tracker = SuitcaseLocationTracker.get(server);
+		UUID expectedSuitcaseId = (tracker == null) ? null : tracker.getLastSuitcase(keystoneName, playerUuid);
+
+		boolean teleported = false;
+		ServerWorld targetWorldUsed = null;
+		Vec3d targetPosUsed = null;
+
+		ServerWorld destWorld = null;
+		Vec3d dest = null;
+		if (tracker != null && expectedSuitcaseId != null) {
+			SuitcaseLocationTracker.SuitcaseInstanceLocation sLoc = tracker.getSuitcaseLocation(expectedSuitcaseId);
+			if (sLoc != null && sLoc.type != SuitcaseLocationTracker.LocationType.DESTROYED) {
+				ServerWorld w = worldFromId(server, sLoc.dimensionId);
+				if (w != pocketWorld) {
+					destWorld = w;
+					dest = new Vec3d(sLoc.x, sLoc.y, sLoc.z);
+				}
+			}
+		}
+		if (dest == null && tracker != null) {
+			SuitcaseLocationTracker.LocationData loc = tracker.getLocation(keystoneName, playerUuid);
+			if (loc != null && loc.type != SuitcaseLocationTracker.LocationType.DESTROYED
+					&& (expectedSuitcaseId == null || expectedSuitcaseId.equals(loc.suitcaseId))) {
+				ServerWorld w = worldFromId(server, loc.dimensionId);
+				if (w != pocketWorld) {
+					destWorld = w;
+					dest = new Vec3d(loc.x, loc.y, loc.z);
+				}
+			}
+		}
+		if (dest != null && teleportMobTo(mob, destWorld, dest)) {
+			teleported = true;
+			targetWorldUsed = destWorld;
+			targetPosUsed = dest;
+		}
+
+		if (!teleported && expectedSuitcaseId != null) {
+			TeleportResult res = findSuitcaseAndTeleportMob(server, pocketWorld, mob, keystoneName, expectedSuitcaseId);
+			if (res.success) {
+				teleported = true;
+				targetWorldUsed = res.world;
+				targetPosUsed = res.pos;
+			}
+		}
+
+		// Last resort: where the player went in
+		if (!teleported && tracker != null) {
+			SuitcaseLocationTracker.LocationData entry = tracker.getEntryLocation(keystoneName, playerUuid);
+			if (entry != null) {
+				ServerWorld w = worldFromId(server, entry.dimensionId);
+				Vec3d pos = new Vec3d(entry.x, entry.y, entry.z);
+				if (w != pocketWorld && teleportMobTo(mob, w, pos)) {
+					teleported = true;
+					targetWorldUsed = w;
+					targetPosUsed = pos;
+				}
+			}
+		}
+
+		return teleported ? new TeleportResult(true, targetWorldUsed, targetPosUsed) : TeleportResult.fail();
+	}
+
+	/**
+	 * A mob that falls off the bottom of a pocket dimension leaves it as if released with a key by the player
+	 * who most recently went in. With no one to follow, it goes to the world spawn.
+	 */
+	public static void releaseFallenMob(ServerWorld pocketWorld, LivingEntity mob) {
+		MinecraftServer server = pocketWorld.getServer();
+		String keystoneName = pocketWorld.getRegistryKey().getValue().getPath().substring("pocket_dimension_".length());
+		SuitcaseLocationTracker tracker = SuitcaseLocationTracker.get(server);
+		String playerUuid = tracker == null ? null : tracker.getLatestEntrant(keystoneName);
+
+		// Falling this far would hurt on arrival (the mob is copied into the other dimension, fall distance and all)
+		mob.fallDistance = 0f;
+		TeleportResult res = playerUuid == null ? TeleportResult.fail() : sendMobOut(server, pocketWorld, mob, keystoneName, playerUuid);
+		if (!res.success) {
+			ServerWorld overworld = server.getOverworld();
+			Vec3d safe = PocketPortalBlock.findSafeSpotNear(overworld, overworld.getSpawnPos());
+			if (safe == null) safe = Vec3d.ofBottomCenter(overworld.getSpawnPos());
+			teleportMobTo(mob, overworld, safe);
+			res = new TeleportResult(true, overworld, safe);
+		}
+		res.world.playSound(null, res.pos.x, res.pos.y, res.pos.z,
+				SoundEvents.ITEM_BUNDLE_DROP_CONTENTS, SoundCategory.PLAYERS, 2.0f, 1.0f);
 	}
 	private static class TeleportResult {
 		final boolean success;
@@ -1162,7 +1400,7 @@ public class PocketRepose implements ModInitializer {
 	}
 	private static boolean isSuitcaseWithKeystoneAndId(ItemStack stack, String keystoneName, UUID expectedSuitcaseId) {
 		if (stack.isEmpty() || !(stack.getItem() instanceof BlockItem bi)
-				|| !(bi.getBlock() instanceof SuitcaseBlock)) {
+				|| !SuitcaseBlock.isPocketBlock(bi.getBlock())) {
 			return false;
 		}
 
@@ -1177,9 +1415,10 @@ public class PocketRepose implements ModInitializer {
 
 		return expectedSuitcaseId.equals(id);
 	}
-	private static TeleportResult findSuitcaseAndTeleportMob(MinecraftServer server, LivingEntity mob, String keystoneName, UUID expectedSuitcaseId) {
+	private static TeleportResult findSuitcaseAndTeleportMob(MinecraftServer server, ServerWorld pocketWorld, LivingEntity mob, String keystoneName, UUID expectedSuitcaseId) {
 
 		for (ServerPlayerEntity online : server.getPlayerManager().getPlayerList()) {
+			if (online.getServerWorld() == pocketWorld) continue;
 			for (int i = 0; i < online.getInventory().size(); i++) {
 				ItemStack stack = online.getInventory().getStack(i);
 				if (isSuitcaseWithKeystoneAndId(stack, keystoneName, expectedSuitcaseId)) {
@@ -1192,6 +1431,7 @@ public class PocketRepose implements ModInitializer {
 		}
 
 		for (ServerWorld w : server.getWorlds()) {
+			if (w == pocketWorld) continue;
 			for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
 				if (p.getServerWorld() != w) continue;
 
@@ -1210,6 +1450,7 @@ public class PocketRepose implements ModInitializer {
 
 		for (ServerPlayerEntity online : server.getPlayerManager().getPlayerList()) {
 			ServerWorld w = online.getServerWorld();
+			if (w == pocketWorld) continue;
 			ChunkPos center = online.getChunkPos();
 			int radius = 8;
 
