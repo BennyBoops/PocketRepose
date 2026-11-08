@@ -13,7 +13,10 @@
 		"DimensionOptionsMixin",
 		"SimpleRegistryMixin",
 		"ShapelessRecipeMixin",
-		"ServerPlayNetworkHandlerMixin"
+		"ServerPlayNetworkHandlerMixin",
+		"DimensionsConfigMixin",
+		"DimensionOptionsRegistryHolderInvoker",
+		"PlayerManagerMixin"
 	],
 	"injectors": {
 		"defaultRequire": 1

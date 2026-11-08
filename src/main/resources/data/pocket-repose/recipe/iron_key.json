@@ -2,23 +2,23 @@
   "type": "minecraft:crafting_shaped",
   "category": "misc",
   "pattern": [
-    "GNG",
+    "INI",
     "NTN",
-    "GNG"
+    "INI"
   ],
   "key": {
     "N": {
       "item": "minecraft:netherite_scrap"
     },
-    "G": {
-      "item": "minecraft:gold_ingot"
+    "I": {
+      "item": "minecraft:iron_ingot"
     },
     "T": {
       "item": "minecraft:tripwire_hook"
     }
   },
   "result": {
-    "id": "pocket-repose:keystone",
+    "id": "pocket-repose:iron_key",
     "count": 1
   }
 }

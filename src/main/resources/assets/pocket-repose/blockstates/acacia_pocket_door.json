@@ -1,0 +1,466 @@
+{
+  "multipart": [
+    {
+      "when": {
+        "facing": "east",
+        "half": "lower",
+        "hinge": "left",
+        "open": "false"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_bottom_left"
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "half": "lower",
+        "hinge": "left",
+        "open": "true"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_bottom_left_open",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "half": "lower",
+        "hinge": "right",
+        "open": "false"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_bottom_right"
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "half": "lower",
+        "hinge": "right",
+        "open": "true"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_bottom_right_open",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "half": "upper",
+        "hinge": "left",
+        "open": "false"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_top_left"
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "half": "upper",
+        "hinge": "left",
+        "open": "true"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_top_left_open",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "half": "upper",
+        "hinge": "right",
+        "open": "false"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_top_right"
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "half": "upper",
+        "hinge": "right",
+        "open": "true"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_top_right_open",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "half": "lower",
+        "hinge": "left",
+        "open": "false"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_bottom_left",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "half": "lower",
+        "hinge": "left",
+        "open": "true"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_bottom_left_open"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "half": "lower",
+        "hinge": "right",
+        "open": "false"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_bottom_right",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "half": "lower",
+        "hinge": "right",
+        "open": "true"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_bottom_right_open",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "half": "upper",
+        "hinge": "left",
+        "open": "false"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_top_left",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "half": "upper",
+        "hinge": "left",
+        "open": "true"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_top_left_open"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "half": "upper",
+        "hinge": "right",
+        "open": "false"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_top_right",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "half": "upper",
+        "hinge": "right",
+        "open": "true"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_top_right_open",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "half": "lower",
+        "hinge": "left",
+        "open": "false"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_bottom_left",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "half": "lower",
+        "hinge": "left",
+        "open": "true"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_bottom_left_open",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "half": "lower",
+        "hinge": "right",
+        "open": "false"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_bottom_right",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "half": "lower",
+        "hinge": "right",
+        "open": "true"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_bottom_right_open"
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "half": "upper",
+        "hinge": "left",
+        "open": "false"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_top_left",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "half": "upper",
+        "hinge": "left",
+        "open": "true"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_top_left_open",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "half": "upper",
+        "hinge": "right",
+        "open": "false"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_top_right",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "half": "upper",
+        "hinge": "right",
+        "open": "true"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_top_right_open"
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "half": "lower",
+        "hinge": "left",
+        "open": "false"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_bottom_left",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "half": "lower",
+        "hinge": "left",
+        "open": "true"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_bottom_left_open",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "half": "lower",
+        "hinge": "right",
+        "open": "false"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_bottom_right",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "half": "lower",
+        "hinge": "right",
+        "open": "true"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_bottom_right_open",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "half": "upper",
+        "hinge": "left",
+        "open": "false"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_top_left",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "half": "upper",
+        "hinge": "left",
+        "open": "true"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_top_left_open",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "half": "upper",
+        "hinge": "right",
+        "open": "false"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_top_right",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "half": "upper",
+        "hinge": "right",
+        "open": "true"
+      },
+      "apply": {
+        "model": "minecraft:block/acacia_door_top_right_open",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "hinge": "left",
+        "open": "true"
+      },
+      "apply": {
+        "model": "pocket-repose:block/pocket_door_void_left"
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "hinge": "right",
+        "open": "true"
+      },
+      "apply": {
+        "model": "pocket-repose:block/pocket_door_void_right"
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "hinge": "left",
+        "open": "true"
+      },
+      "apply": {
+        "model": "pocket-repose:block/pocket_door_void_left",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "hinge": "right",
+        "open": "true"
+      },
+      "apply": {
+        "model": "pocket-repose:block/pocket_door_void_right",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "hinge": "left",
+        "open": "true"
+      },
+      "apply": {
+        "model": "pocket-repose:block/pocket_door_void_left",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "hinge": "right",
+        "open": "true"
+      },
+      "apply": {
+        "model": "pocket-repose:block/pocket_door_void_right",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "hinge": "left",
+        "open": "true"
+      },
+      "apply": {
+        "model": "pocket-repose:block/pocket_door_void_left",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "hinge": "right",
+        "open": "true"
+      },
+      "apply": {
+        "model": "pocket-repose:block/pocket_door_void_right",
+        "y": 180
+      }
+    }
+  ]
+}

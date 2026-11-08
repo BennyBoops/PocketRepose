@@ -1,5 +1,6 @@
 package net.bennyboops.modid.block.entity;
 
+import net.minecraft.block.Block;
 import net.bennyboops.modid.data.SuitcaseLocationTracker;
 import net.bennyboops.modid.data.SuitcaseRegistrySavedData;
 import net.minecraft.block.BlockState;
@@ -76,8 +77,21 @@ public class SuitcaseBlockEntity extends BlockEntity {
         }
     }
 
+    // Client-only lid animation for the Secret Chest, with the same timing as a vanilla chest
+    private float lidProgress;
+    private float lastLidProgress;
+
     public SuitcaseBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.SUITCASE_BLOCK_ENTITY, pos, state);
+    }
+
+    public void tickLid(boolean open) {
+        lastLidProgress = lidProgress;
+        lidProgress = open ? Math.min(lidProgress + 0.1F, 1.0F) : Math.max(lidProgress - 0.1F, 0.0F);
+    }
+
+    public float getLidProgress(float tickDelta) {
+        return net.minecraft.util.math.MathHelper.lerp(tickDelta, lastLidProgress, lidProgress);
     }
 
     public boolean canOpenInDimension(World world) {
@@ -160,7 +174,15 @@ public class SuitcaseBlockEntity extends BlockEntity {
 
     public void bindKeystone(String keystoneName) {
         this.boundKeystoneName = keystoneName;
+        markDirtyAndSync();
+    }
+
+    /** Saves the change and sends it to nearby players, whose game uses it to open pocket doors without lag. */
+    private void markDirtyAndSync() {
         markDirty();
+        if (world != null && !world.isClient) {
+            world.updateListeners(pos, getCachedState(), getCachedState(), Block.NOTIFY_LISTENERS);
+        }
     }
 
     public String getBoundKeystoneName() {
@@ -169,7 +191,7 @@ public class SuitcaseBlockEntity extends BlockEntity {
 
     public void setLocked(boolean locked) {
         this.isLocked = locked;
-        markDirty();
+        markDirtyAndSync();
     }
 
     public boolean isLocked() {
@@ -215,7 +237,8 @@ public class SuitcaseBlockEntity extends BlockEntity {
     }
 
     @Nullable
-    public Packet<ClientPlayPacketListener> toUpdatePacket(RegistryWrapper.WrapperLookup registry) {
+    @Override
+    public Packet<ClientPlayPacketListener> toUpdatePacket() {
         return BlockEntityUpdateS2CPacket.create(this);
     }
 

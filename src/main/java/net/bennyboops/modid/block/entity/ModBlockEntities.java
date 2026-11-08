@@ -30,7 +30,19 @@ public class ModBlockEntities {
                             ModBlocks.PURPLE_SUITCASE,
                             ModBlocks.MAGENTA_SUITCASE,
                             ModBlocks.PINK_SUITCASE,
-                            ModBlocks.SECRET_BARREL
+                            ModBlocks.SECRET_BARREL,
+                            ModBlocks.SECRET_CHEST,
+                            ModBlocks.OAK_POCKET_DOOR,
+                            ModBlocks.SPRUCE_POCKET_DOOR,
+                            ModBlocks.BIRCH_POCKET_DOOR,
+                            ModBlocks.JUNGLE_POCKET_DOOR,
+                            ModBlocks.ACACIA_POCKET_DOOR,
+                            ModBlocks.DARK_OAK_POCKET_DOOR,
+                            ModBlocks.MANGROVE_POCKET_DOOR,
+                            ModBlocks.CHERRY_POCKET_DOOR,
+                            ModBlocks.BAMBOO_POCKET_DOOR,
+                            ModBlocks.CRIMSON_POCKET_DOOR,
+                            ModBlocks.WARPED_POCKET_DOOR
                     ).build(null);
         helper.register(Identifier.of(PocketRepose.MOD_ID, "suitcase"), SUITCASE_BLOCK_ENTITY);
     }

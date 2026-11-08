@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "building",
+  "ingredients": [
+    {
+      "item": "pocket-repose:portal"
+    },
+    {
+      "item": "minecraft:spruce_door"
+    }
+  ],
+  "result": {
+    "id": "pocket-repose:spruce_exit_portal_door",
+    "count": 1
+  }
+}
