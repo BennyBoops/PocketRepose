@@ -40,6 +40,6 @@ public abstract class ShapelessRecipeMixin {
 
     @Unique
     private static boolean pocketRepose$isSuitcase(ItemStack stack) {
-        return stack.getItem() instanceof BlockItem blockItem && blockItem.getBlock() instanceof SuitcaseBlock;
+        return stack.getItem() instanceof BlockItem blockItem && SuitcaseBlock.isPocketBlock(blockItem.getBlock());
     }
 }

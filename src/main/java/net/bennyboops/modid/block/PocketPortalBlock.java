@@ -1,5 +1,11 @@
 package net.bennyboops.modid.block;
 
+import java.util.UUID;
+import org.jetbrains.annotations.Nullable;
+import java.util.List;
+import net.minecraft.client.item.TooltipContext;
+import net.minecraft.world.BlockView;
+import net.minecraft.item.Item;
 import net.bennyboops.modid.block.entity.SuitcaseBlockEntity;
 import net.bennyboops.modid.data.SuitcaseLocationTracker;
 import net.minecraft.block.Block;
@@ -58,6 +64,26 @@ public class PocketPortalBlock extends Block {
         PocketTravelHandler.requestExit(player);
     }
 
+    /**
+     * Which way someone coming back out at exit should face: the front of the suitcase, or away from the
+     * pocket door. Null when the exit isn't at that placed block (then the usual facing is kept).
+     */
+    @Nullable
+    private static Float exitYaw(World world, Vec3d exit, @Nullable UUID suitcaseId) {
+        Float door = PocketDoorBlock.yawAwayFromDoor(world, exit, suitcaseId);
+        return door != null ? door : SuitcaseBlock.yawFacingFront(world, exit, suitcaseId);
+    }
+
+    /** Tooltip for the portal block and exit portal doors. */
+    public static Text exitTooltip() {
+        return Text.literal("An exit from pocket dimensions.").formatted(Formatting.GRAY, Formatting.ITALIC);
+    }
+
+    @Override
+    public void appendTooltip(ItemStack stack, @Nullable BlockView world, List<Text> tooltip, TooltipContext options) {
+        tooltip.add(exitTooltip());
+    }
+
     public static boolean isPocketDimension(World world) {
         Identifier id = world.getRegistryKey().getValue();
         return "pocket-repose".equals(id.getNamespace()) && id.getPath().startsWith("pocket_dimension_");
@@ -69,12 +95,19 @@ public class PocketPortalBlock extends Block {
      * suitcase can't be opened from inside its own pocket dimension.
      */
     public static void exitPocket(ServerPlayerEntity player, ServerWorld pocketWorld) {
+        exitPocket(player, pocketWorld, false);
+    }
+
+    /** As above; quietly skips the portal's departure sound (the Exit Keystone plays ender pearl sounds instead). */
+    public static void exitPocket(ServerPlayerEntity player, ServerWorld pocketWorld, boolean quietly) {
         String currentPath = pocketWorld.getRegistryKey().getValue().getPath();
         String keystoneName = currentPath.substring("pocket_dimension_".length());
         String playerUuid = player.getUuidAsString();
 
         preparePlayerForTeleport(player);
-        pocketWorld.playSound(null, player.getBlockPos(), SoundEvents.ITEM_BUNDLE_DROP_CONTENTS, SoundCategory.PLAYERS, 2.0f, 1.0f);
+        if (!quietly) {
+            pocketWorld.playSound(null, player.getBlockPos(), SoundEvents.ITEM_BUNDLE_DROP_CONTENTS, SoundCategory.PLAYERS, 2.0f, 1.0f);
+        }
 
         MinecraftServer server = pocketWorld.getServer();
         SuitcaseLocationTracker tracker = SuitcaseLocationTracker.get(server);
@@ -89,7 +122,8 @@ public class PocketPortalBlock extends Block {
             if (sLoc != null && sLoc.type != SuitcaseLocationTracker.LocationType.DESTROYED) {
                 ServerWorld targetWorld = worldFromId(server, sLoc.dimensionId);
                 if (targetWorld != null && targetWorld != pocketWorld) {
-                    teleportToPosition(player, targetWorld, sLoc.x, sLoc.y, sLoc.z, player.getYaw(), player.getPitch());
+                    Float facing = exitYaw(targetWorld, new Vec3d(sLoc.x, sLoc.y, sLoc.z), expectedSuitcaseId);
+                    teleportToPosition(player, targetWorld, sLoc.x, sLoc.y, sLoc.z, facing != null ? facing : player.getYaw(), player.getPitch());
                     teleported = true;
                 }
             }
@@ -102,7 +136,12 @@ public class PocketPortalBlock extends Block {
                 if (expectedSuitcaseId == null || (loc.suitcaseId != null && expectedSuitcaseId.equals(loc.suitcaseId))) {
                     ServerWorld targetWorld = worldFromId(server, loc.dimensionId);
                     if (targetWorld != null && targetWorld != pocketWorld) {
-                        teleportToPosition(player, targetWorld, loc.x, loc.y, loc.z, loc.yaw, loc.pitch);
+                        Float facing = exitYaw(targetWorld, new Vec3d(loc.x, loc.y, loc.z), loc.suitcaseId);
+                        if (facing != null) {
+                            teleportToPosition(player, targetWorld, loc.x, loc.y, loc.z, facing, player.getPitch());
+                        } else {
+                            teleportToPosition(player, targetWorld, loc.x, loc.y, loc.z, loc.yaw, loc.pitch);
+                        }
                         teleported = true;
                     }
                 }
@@ -217,7 +256,7 @@ public class PocketPortalBlock extends Block {
         return state.getBlock() instanceof net.minecraft.block.BedBlock
                 || state.isOf(net.minecraft.block.Blocks.RESPAWN_ANCHOR);
     }
-    private static Vec3d findSafeSpotNear(ServerWorld world, BlockPos origin) {
+    public static Vec3d findSafeSpotNear(ServerWorld world, BlockPos origin) {
         for (int dy = 0; dy <= 2; dy++) {
             for (int dx = -2; dx <= 2; dx++) {
                 for (int dz = -2; dz <= 2; dz++) {
@@ -304,7 +343,7 @@ public class PocketPortalBlock extends Block {
 
     private static boolean isSuitcaseWithKeystoneAndId(ItemStack stack, String keystoneName, UUID expectedSuitcaseId) {
         if (stack.isEmpty() || !(stack.getItem() instanceof BlockItem bi)
-                || !(bi.getBlock() instanceof SuitcaseBlock)) {
+                || !(SuitcaseBlock.isPocketBlock(bi.getBlock()))) {
             return false;
         }
 

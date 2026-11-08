@@ -245,6 +245,8 @@ public class SuitcaseLocationTracker extends PersistentState {
 
     public void updateLocation(String keystone, String playerUuid, String dimensionId, UUID suitcaseId,
                                double x, double y, double z, float yaw, float pitch, LocationType type) {
+        // A suitcase carried or placed inside the pocket dimension it leads to is never a way out of it
+        if (("pocket-repose:pocket_dimension_" + keystone).equals(dimensionId)) return;
 
         if (type == LocationType.ENTRY) {
             entryLocations
@@ -268,6 +270,21 @@ public class SuitcaseLocationTracker extends PersistentState {
     public LocationData getLocation(String keystone, String playerUuid) {
         Map<String, LocationData> m = locations.get(keystone);
         return (m == null) ? null : m.get(playerUuid);
+    }
+
+    /** The player who most recently went into this pocket dimension, or null if no one has. */
+    public String getLatestEntrant(String keystone) {
+        Map<String, LocationData> m = entryLocations.get(keystone);
+        if (m == null) return null;
+        String latest = null;
+        long time = Long.MIN_VALUE;
+        for (var e : m.entrySet()) {
+            if (e.getValue().timestamp > time) {
+                time = e.getValue().timestamp;
+                latest = e.getKey();
+            }
+        }
+        return latest;
     }
 
     public LocationData getEntryLocation(String keystone, String playerUuid) {

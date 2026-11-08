@@ -1,0 +1,27 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "misc",
+  "pattern": [
+    "DDD",
+    "DPD",
+    "CLC"
+  ],
+  "key": {
+    "D": {
+      "item": "minecraft:diamond"
+    },
+    "P": {
+      "item": "pocket-repose:portal"
+    },
+    "C": {
+      "item": "minecraft:crying_obsidian"
+    },
+    "L": {
+      "item": "minecraft:lodestone"
+    }
+  },
+  "result": {
+    "item": "pocket-repose:exit_keystone",
+    "count": 1
+  }
+}
