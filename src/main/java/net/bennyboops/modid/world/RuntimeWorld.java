@@ -1,5 +1,7 @@
 package net.bennyboops.modid.world;
 
+import net.bennyboops.modid.PocketRepose;
+import net.minecraft.util.Identifier;
 import com.google.common.collect.ImmutableList;
 import net.bennyboops.modid.mixin.MinecraftServerAccess;
 import net.bennyboops.modid.util.VoidWorldProgressListener;
@@ -55,7 +57,10 @@ public class RuntimeWorld extends ServerWorld {
 
     @Override
     public long getSeed() {
-        return ((RuntimeWorldProperties) this.properties).config.getSeed();
+        long seed = ((RuntimeWorldProperties) this.properties).config.getSeed();
+        Identifier id = this.getRegistryKey().getValue();
+        // Same seed the dimension gets when vanilla reloads it after a restart (see ServerWorldMixin)
+        return PocketRepose.MOD_ID.equals(id.getNamespace()) ? PocketRepose.pocketSeed(seed, id.getPath()) : seed;
     }
 
     @Override
