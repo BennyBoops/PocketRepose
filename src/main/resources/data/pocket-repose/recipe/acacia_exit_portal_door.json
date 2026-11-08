@@ -1,0 +1,16 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "building",
+  "ingredients": [
+    {
+      "item": "pocket-repose:portal"
+    },
+    {
+      "item": "minecraft:acacia_door"
+    }
+  ],
+  "result": {
+    "id": "pocket-repose:acacia_exit_portal_door",
+    "count": 1
+  }
+}

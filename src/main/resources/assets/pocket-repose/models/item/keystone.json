@@ -1,14 +1,14 @@
 {
   "parent": "item/generated",
   "textures": {
-    "layer0": "pocket-repose:item/keystone"
+    "layer0": "pocket-repose:item/gold_key"
   },
   "overrides": [
     {
       "predicate": {
         "custom_model_data": 1
       },
-      "model": "pocket-repose:item/keystone_unnamed"
+      "model": "pocket-repose:item/gold_key_unnamed"
     }
   ]
 }

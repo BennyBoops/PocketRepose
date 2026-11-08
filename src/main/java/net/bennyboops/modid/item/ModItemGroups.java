@@ -15,9 +15,12 @@ public class ModItemGroups {
     public static final ItemGroup POCKET_GROUP = Registry.register(Registries.ITEM_GROUP,
             Identifier.of(PocketRepose.MOD_ID, "pocket"),
             FabricItemGroup.builder().displayName(Text.translatable("itemgroup.pocket"))
-                    .icon(() -> new ItemStack(ModItems.KEYSTONE)).entries((displayContext, entries) -> {
+                    .icon(() -> new ItemStack(ModItems.GOLD_KEY)).entries((displayContext, entries) -> {
 
-                        entries.add(ModItems.KEYSTONE);
+                        entries.add(ModItems.GOLD_KEY);
+                        entries.add(ModItems.IRON_KEY);
+                        entries.add(ModItems.NETHERITE_KEY);
+                        entries.add(ModItems.EXIT_KEYSTONE);
 
                         entries.add(ModBlocks.SUITCASE);
                         entries.add(ModBlocks.WHITE_SUITCASE);
@@ -37,6 +40,9 @@ public class ModItemGroups {
                         entries.add(ModBlocks.PINK_SUITCASE);
 
                         entries.add(ModBlocks.SECRET_BARREL);
+                        entries.add(ModBlocks.SECRET_CHEST);
+                        ModBlocks.POCKET_DOORS.forEach(entries::add);
+                        ModBlocks.EXIT_DOORS.forEach(entries::add);
 
                         entries.add(ModBlocks.PORTAL);
 
