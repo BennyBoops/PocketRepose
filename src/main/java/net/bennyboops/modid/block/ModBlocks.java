@@ -7,7 +7,6 @@ import net.neoforged.neoforge.registries.RegisterEvent;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockSetType;
 import net.minecraft.block.Blocks;
-import net.minecraft.block.DoorBlock;
 import net.minecraft.item.BlockItem;
 import net.minecraft.item.Item;
 import net.minecraft.item.TallBlockItem;
@@ -178,9 +177,9 @@ public class ModBlocks {
     }
 
     private static Block registerPocketDoor(String wood, Block door, BlockSetType type) {
+        // No light when open, so the hallway behind the doorway stays dark
         Block block = registerBlock(wood + "_pocket_door", new PocketDoorBlock(type, AbstractBlock.Settings.copy(door)
-                .strength(1.0f)
-                .luminance(state -> state.get(DoorBlock.OPEN) ? 8 : 0)),
+                .strength(1.0f)),
                 b -> new TallBlockItem(b, new Item.Settings()));
         POCKET_DOORS.add(block);
         return block;
@@ -189,8 +188,7 @@ public class ModBlocks {
     private static Block registerExitDoor(String wood, Block door, BlockSetType type) {
         // Break time of the portal block (its sounds are set in ExitDoorBlock)
         Block block = registerBlock(wood + "_exit_portal_door", new ExitDoorBlock(type, AbstractBlock.Settings.copy(door)
-                .strength(5.0f)
-                .luminance(state -> state.get(DoorBlock.OPEN) ? 8 : 0)),
+                .strength(5.0f)),
                 b -> new TallBlockItem(b, new Item.Settings()));
         EXIT_DOORS.add(block);
         return block;

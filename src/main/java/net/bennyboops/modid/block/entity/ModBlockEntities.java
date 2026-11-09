@@ -2,6 +2,7 @@ package net.bennyboops.modid.block.entity;
 
 import net.bennyboops.modid.PocketRepose;
 import net.bennyboops.modid.block.ModBlocks;
+import net.minecraft.block.Block;
 import net.minecraft.block.entity.BlockEntityType;
 import net.neoforged.neoforge.registries.RegisterEvent;
 import net.minecraft.util.Identifier;
@@ -9,6 +10,8 @@ import net.minecraft.util.Identifier;
 public class ModBlockEntities {
 
     public static BlockEntityType<SuitcaseBlockEntity> SUITCASE_BLOCK_ENTITY;
+    // In the lower half of exit portal doors, to draw the doorway as a hallway
+    public static BlockEntityType<DoorwayBlockEntity> DOORWAY_BLOCK_ENTITY;
 
     public static void registerBlockEntities(RegisterEvent.RegisterHelper<BlockEntityType<?>> helper) {
         SUITCASE_BLOCK_ENTITY = BlockEntityType.Builder.create(
@@ -45,5 +48,7 @@ public class ModBlockEntities {
                             ModBlocks.WARPED_POCKET_DOOR
                     ).build(null);
         helper.register(Identifier.of(PocketRepose.MOD_ID, "suitcase"), SUITCASE_BLOCK_ENTITY);
+        DOORWAY_BLOCK_ENTITY = BlockEntityType.Builder.create(DoorwayBlockEntity::new, ModBlocks.EXIT_DOORS.toArray(new Block[0])).build(null);
+        helper.register(Identifier.of(PocketRepose.MOD_ID, "doorway"), DOORWAY_BLOCK_ENTITY);
     }
 }
