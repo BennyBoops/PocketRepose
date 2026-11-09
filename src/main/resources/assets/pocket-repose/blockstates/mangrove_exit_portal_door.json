@@ -379,86 +379,408 @@
     {
       "when": {
         "facing": "east",
+        "half": "lower",
         "hinge": "left",
-        "open": "true"
+        "open": "true",
+        "paired": "false"
       },
       "apply": {
-        "model": "pocket-repose:block/pocket_door_void_left"
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_bottom_left"
       }
     },
     {
       "when": {
         "facing": "east",
-        "hinge": "right",
-        "open": "true"
+        "half": "lower",
+        "hinge": "left",
+        "open": "true",
+        "paired": "true"
       },
       "apply": {
-        "model": "pocket-repose:block/pocket_door_void_right"
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_bottom_left_paired"
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "half": "lower",
+        "hinge": "right",
+        "open": "true",
+        "paired": "false"
+      },
+      "apply": {
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_bottom_right"
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "half": "lower",
+        "hinge": "right",
+        "open": "true",
+        "paired": "true"
+      },
+      "apply": {
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_bottom_right_paired"
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "half": "upper",
+        "hinge": "left",
+        "open": "true",
+        "paired": "false"
+      },
+      "apply": {
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_top_left"
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "half": "upper",
+        "hinge": "left",
+        "open": "true",
+        "paired": "true"
+      },
+      "apply": {
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_top_left_paired"
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "half": "upper",
+        "hinge": "right",
+        "open": "true",
+        "paired": "false"
+      },
+      "apply": {
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_top_right"
+      }
+    },
+    {
+      "when": {
+        "facing": "east",
+        "half": "upper",
+        "hinge": "right",
+        "open": "true",
+        "paired": "true"
+      },
+      "apply": {
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_top_right_paired"
       }
     },
     {
       "when": {
         "facing": "north",
+        "half": "lower",
         "hinge": "left",
-        "open": "true"
+        "open": "true",
+        "paired": "false"
       },
       "apply": {
-        "model": "pocket-repose:block/pocket_door_void_left",
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_bottom_left",
         "y": 270
       }
     },
     {
       "when": {
         "facing": "north",
-        "hinge": "right",
-        "open": "true"
+        "half": "lower",
+        "hinge": "left",
+        "open": "true",
+        "paired": "true"
       },
       "apply": {
-        "model": "pocket-repose:block/pocket_door_void_right",
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_bottom_left_paired",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "half": "lower",
+        "hinge": "right",
+        "open": "true",
+        "paired": "false"
+      },
+      "apply": {
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_bottom_right",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "half": "lower",
+        "hinge": "right",
+        "open": "true",
+        "paired": "true"
+      },
+      "apply": {
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_bottom_right_paired",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "half": "upper",
+        "hinge": "left",
+        "open": "true",
+        "paired": "false"
+      },
+      "apply": {
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_top_left",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "half": "upper",
+        "hinge": "left",
+        "open": "true",
+        "paired": "true"
+      },
+      "apply": {
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_top_left_paired",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "half": "upper",
+        "hinge": "right",
+        "open": "true",
+        "paired": "false"
+      },
+      "apply": {
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_top_right",
+        "y": 270
+      }
+    },
+    {
+      "when": {
+        "facing": "north",
+        "half": "upper",
+        "hinge": "right",
+        "open": "true",
+        "paired": "true"
+      },
+      "apply": {
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_top_right_paired",
         "y": 270
       }
     },
     {
       "when": {
         "facing": "south",
+        "half": "lower",
         "hinge": "left",
-        "open": "true"
+        "open": "true",
+        "paired": "false"
       },
       "apply": {
-        "model": "pocket-repose:block/pocket_door_void_left",
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_bottom_left",
         "y": 90
       }
     },
     {
       "when": {
         "facing": "south",
-        "hinge": "right",
-        "open": "true"
+        "half": "lower",
+        "hinge": "left",
+        "open": "true",
+        "paired": "true"
       },
       "apply": {
-        "model": "pocket-repose:block/pocket_door_void_right",
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_bottom_left_paired",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "half": "lower",
+        "hinge": "right",
+        "open": "true",
+        "paired": "false"
+      },
+      "apply": {
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_bottom_right",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "half": "lower",
+        "hinge": "right",
+        "open": "true",
+        "paired": "true"
+      },
+      "apply": {
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_bottom_right_paired",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "half": "upper",
+        "hinge": "left",
+        "open": "true",
+        "paired": "false"
+      },
+      "apply": {
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_top_left",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "half": "upper",
+        "hinge": "left",
+        "open": "true",
+        "paired": "true"
+      },
+      "apply": {
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_top_left_paired",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "half": "upper",
+        "hinge": "right",
+        "open": "true",
+        "paired": "false"
+      },
+      "apply": {
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_top_right",
+        "y": 90
+      }
+    },
+    {
+      "when": {
+        "facing": "south",
+        "half": "upper",
+        "hinge": "right",
+        "open": "true",
+        "paired": "true"
+      },
+      "apply": {
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_top_right_paired",
         "y": 90
       }
     },
     {
       "when": {
         "facing": "west",
+        "half": "lower",
         "hinge": "left",
-        "open": "true"
+        "open": "true",
+        "paired": "false"
       },
       "apply": {
-        "model": "pocket-repose:block/pocket_door_void_left",
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_bottom_left",
         "y": 180
       }
     },
     {
       "when": {
         "facing": "west",
-        "hinge": "right",
-        "open": "true"
+        "half": "lower",
+        "hinge": "left",
+        "open": "true",
+        "paired": "true"
       },
       "apply": {
-        "model": "pocket-repose:block/pocket_door_void_right",
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_bottom_left_paired",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "half": "lower",
+        "hinge": "right",
+        "open": "true",
+        "paired": "false"
+      },
+      "apply": {
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_bottom_right",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "half": "lower",
+        "hinge": "right",
+        "open": "true",
+        "paired": "true"
+      },
+      "apply": {
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_bottom_right_paired",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "half": "upper",
+        "hinge": "left",
+        "open": "true",
+        "paired": "false"
+      },
+      "apply": {
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_top_left",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "half": "upper",
+        "hinge": "left",
+        "open": "true",
+        "paired": "true"
+      },
+      "apply": {
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_top_left_paired",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "half": "upper",
+        "hinge": "right",
+        "open": "true",
+        "paired": "false"
+      },
+      "apply": {
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_top_right",
+        "y": 180
+      }
+    },
+    {
+      "when": {
+        "facing": "west",
+        "half": "upper",
+        "hinge": "right",
+        "open": "true",
+        "paired": "true"
+      },
+      "apply": {
+        "model": "pocket-repose:block/mangrove_pocket_door_frame_top_right_paired",
         "y": 180
       }
     }

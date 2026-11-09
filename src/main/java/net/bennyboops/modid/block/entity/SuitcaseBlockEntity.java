@@ -1,5 +1,6 @@
 package net.bennyboops.modid.block.entity;
 
+import net.minecraft.util.math.Box;
 import net.minecraft.block.Block;
 import net.bennyboops.modid.data.SuitcaseLocationTracker;
 import net.bennyboops.modid.data.SuitcaseRegistrySavedData;
@@ -305,5 +306,12 @@ public class SuitcaseBlockEntity extends BlockEntity {
             Map<String, BlockPos> players = destination.computeIfAbsent(entry.getKey(), k -> new HashMap<>());
             players.putAll(entry.getValue());
         }
+    }
+
+    // Forge only draws a block entity while this box is in view. A pocket door's doorway (drawn from its lower
+    // half) is two blocks tall, so the box covers the block above too
+    @Override
+    public Box getRenderBoundingBox() {
+        return new Box(pos.getX(), pos.getY(), pos.getZ(), pos.getX() + 1, pos.getY() + 2, pos.getZ() + 1);
     }
 }
