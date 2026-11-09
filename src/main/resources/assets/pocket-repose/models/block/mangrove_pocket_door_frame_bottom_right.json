@@ -1,0 +1,7 @@
+{
+  "parent": "pocket-repose:block/pocket_door_frame_bottom_right",
+  "textures": {
+    "bottom": "minecraft:block/mangrove_door_bottom",
+    "top": "minecraft:block/mangrove_door_top"
+  }
+}

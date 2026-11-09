@@ -1,0 +1,7 @@
+{
+  "parent": "pocket-repose:block/pocket_door_frame_top_left_paired",
+  "textures": {
+    "bottom": "minecraft:block/warped_door_bottom",
+    "top": "minecraft:block/warped_door_top"
+  }
+}
