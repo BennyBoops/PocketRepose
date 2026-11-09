@@ -9,6 +9,7 @@ import net.minecraft.block.DoorBlock;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.block.enums.DoubleBlockHalf;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemPlacementContext;
@@ -83,6 +84,12 @@ public class PocketDoorBlock extends DoorwayBlock implements BlockEntityProvider
             }
         }
         return null;
+    }
+
+    // An item thrown through the open doorway goes in, to the player entry point
+    @Override
+    protected void onItemThrough(BlockState state, ServerWorld world, BlockPos pos, ItemEntity item) {
+        PocketTravelHandler.requestItemEntry(item, world, lowerHalf(state, pos));
     }
 
     @Override

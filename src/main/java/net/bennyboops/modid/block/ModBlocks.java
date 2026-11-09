@@ -117,9 +117,9 @@ public class ModBlocks {
 
     private static Block registerPocketDoor(String wood, Block door, BlockSetType type) {
         Identifier id = new Identifier(PocketRepose.MOD_ID, wood + "_pocket_door");
+        // No light when open, so the hallway behind the doorway stays dark
         Block block = Registry.register(Registries.BLOCK, id, new PocketDoorBlock(type, AbstractBlock.Settings.copy(door)
-                .strength(1.0f)
-                .luminance(state -> state.get(DoorBlock.OPEN) ? 8 : 0)));
+                .strength(1.0f)));
         Registry.register(Registries.ITEM, id, new TallBlockItem(block, new Item.Settings()));
         POCKET_DOORS.add(block);
         return block;
@@ -129,8 +129,7 @@ public class ModBlocks {
         Identifier id = new Identifier(PocketRepose.MOD_ID, wood + "_exit_portal_door");
         // Break time of the portal block (its sounds are set in ExitDoorBlock)
         Block block = Registry.register(Registries.BLOCK, id, new ExitDoorBlock(type, AbstractBlock.Settings.copy(door)
-                .strength(5.0f)
-                .luminance(state -> state.get(DoorBlock.OPEN) ? 8 : 0)));
+                .strength(5.0f)));
         Registry.register(Registries.ITEM, id, new TallBlockItem(block, new Item.Settings()));
         EXIT_DOORS.add(block);
         return block;

@@ -2,6 +2,7 @@ package net.bennyboops.modid.block.entity;
 
 import net.bennyboops.modid.PocketRepose;
 import net.bennyboops.modid.block.ModBlocks;
+import net.minecraft.block.Block;
 import net.minecraft.block.entity.BlockEntityType;
 import net.minecraft.registry.Registries;
 import net.minecraft.registry.Registry;
@@ -46,6 +47,13 @@ public class ModBlockEntities {
                             ModBlocks.CRIMSON_POCKET_DOOR,
                             ModBlocks.WARPED_POCKET_DOOR
                     ).build(null)
+            );
+
+    public static final BlockEntityType<DoorwayBlockEntity> DOORWAY_BLOCK_ENTITY =
+            Registry.register(
+                    Registries.BLOCK_ENTITY_TYPE,
+                    new Identifier(PocketRepose.MOD_ID, "doorway"),
+                    BlockEntityType.Builder.create(DoorwayBlockEntity::new, ModBlocks.EXIT_DOORS.toArray(new Block[0])).build(null)
             );
 
     public static void registerBlockEntities() {

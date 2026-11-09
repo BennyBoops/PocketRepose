@@ -39,6 +39,7 @@ import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.entity.EntityType;
+import net.minecraft.entity.Entity;
 import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.mob.*;
@@ -87,6 +88,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import org.jetbrains.annotations.Nullable;
+
 import java.nio.file.Path;
 import java.util.*;
 import java.util.function.BooleanSupplier;
@@ -1282,7 +1285,7 @@ public class PocketRepose implements ModInitializer {
 	 * same order as for players, and never anywhere inside the pocket dimension being left (a suitcase bound
 	 * to it can be carried or placed in it).
 	 */
-	private static TeleportResult sendMobOut(MinecraftServer server, ServerWorld pocketWorld, LivingEntity mob,
+	private static TeleportResult sendMobOut(MinecraftServer server, ServerWorld pocketWorld, Entity mob,
 											 String keystoneName, String playerUuid) {
 		SuitcaseLocationTracker tracker = SuitcaseLocationTracker.get(server);
 		UUID expectedSuitcaseId = (tracker == null) ? null : tracker.getLastSuitcase(keystoneName, playerUuid);
@@ -1351,24 +1354,46 @@ public class PocketRepose implements ModInitializer {
 	 * who most recently went in. With no one to follow, it goes to the world spawn.
 	 */
 	public static void releaseFallenMob(ServerWorld pocketWorld, LivingEntity mob) {
+		sendOut(pocketWorld, mob, null);
+	}
+
+	/**
+	 * An item thrown into a portal block or an exit portal door (or falling off the bottom) leaves a pocket
+	 * dimension like a released mob: to where the player who threw it would come back out, or else the player who
+	 * most recently went in, or else the world spawn.
+	 */
+	public static void releaseItem(ServerWorld pocketWorld, ItemEntity item) {
+		String playerUuid = item.getOwner() instanceof PlayerEntity thrower ? thrower.getUuidAsString() : null;
+		sendOut(pocketWorld, item, playerUuid);
+	}
+
+	/** Sends an entity out of a pocket dimension, following the given player (or the latest one in, if null). */
+	private static void sendOut(ServerWorld pocketWorld, Entity entity, @Nullable String playerUuid) {
 		MinecraftServer server = pocketWorld.getServer();
 		String keystoneName = pocketWorld.getRegistryKey().getValue().getPath().substring("pocket_dimension_".length());
 		SuitcaseLocationTracker tracker = SuitcaseLocationTracker.get(server);
-		String playerUuid = tracker == null ? null : tracker.getLatestEntrant(keystoneName);
+		// Only someone who has come in through a pocket block of this dimension has a way out to follow
+		if (playerUuid != null && (tracker == null || tracker.getLastSuitcase(keystoneName, playerUuid) == null)) {
+			playerUuid = null;
+		}
+		if (playerUuid == null && tracker != null) {
+			playerUuid = tracker.getLatestEntrant(keystoneName);
+		}
 
-		// Falling this far would hurt on arrival (the mob is copied into the other dimension, fall distance and all)
-		mob.fallDistance = 0f;
-		TeleportResult res = playerUuid == null ? TeleportResult.fail() : sendMobOut(server, pocketWorld, mob, keystoneName, playerUuid);
+		// Falling this far would hurt on arrival (the entity is copied into the other dimension, fall distance and all)
+		entity.fallDistance = 0f;
+		TeleportResult res = playerUuid == null ? TeleportResult.fail() : sendMobOut(server, pocketWorld, entity, keystoneName, playerUuid);
 		if (!res.success) {
 			ServerWorld overworld = server.getOverworld();
 			Vec3d safe = PocketPortalBlock.findSafeSpotNear(overworld, overworld.getSpawnPos());
 			if (safe == null) safe = Vec3d.ofBottomCenter(overworld.getSpawnPos());
-			teleportMobTo(mob, overworld, safe);
+			teleportMobTo(entity, overworld, safe);
 			res = new TeleportResult(true, overworld, safe);
 		}
 		res.world.playSound(null, res.pos.x, res.pos.y, res.pos.z,
 				SoundEvents.ITEM_BUNDLE_DROP_CONTENTS, SoundCategory.PLAYERS, 2.0f, 1.0f);
 	}
+
 	private static class TeleportResult {
 		final boolean success;
 		final ServerWorld world;
@@ -1384,7 +1409,7 @@ public class PocketRepose implements ModInitializer {
 			return new TeleportResult(false, null, null);
 		}
 	}
-	private static boolean teleportMobTo(LivingEntity mob, ServerWorld targetWorld, Vec3d pos) {
+	private static boolean teleportMobTo(Entity mob, ServerWorld targetWorld, Vec3d pos) {
 		mob.teleport(targetWorld, pos.x, pos.y, pos.z, EnumSet.noneOf(PositionFlag.class), mob.getYaw(), mob.getPitch());
 		return true;
 	}
@@ -1415,7 +1440,7 @@ public class PocketRepose implements ModInitializer {
 
 		return expectedSuitcaseId.equals(id);
 	}
-	private static TeleportResult findSuitcaseAndTeleportMob(MinecraftServer server, ServerWorld pocketWorld, LivingEntity mob, String keystoneName, UUID expectedSuitcaseId) {
+	private static TeleportResult findSuitcaseAndTeleportMob(MinecraftServer server, ServerWorld pocketWorld, Entity mob, String keystoneName, UUID expectedSuitcaseId) {
 
 		for (ServerPlayerEntity online : server.getPlayerManager().getPlayerList()) {
 			if (online.getServerWorld() == pocketWorld) continue;

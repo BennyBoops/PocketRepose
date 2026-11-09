@@ -3,6 +3,7 @@ package net.bennyboops.modid.block;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.bennyboops.modid.PocketRepose;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.server.MinecraftServer;
@@ -18,7 +19,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -36,6 +39,35 @@ public final class PocketTravelHandler {
 
     /** from: where the player stood before walking in, which decides the side a pocket door lets them back out on. */
     private record PendingEntry(ServerWorld world, BlockPos pos, Vec3d from) {
+    }
+
+    // Items thrown into pocket blocks, and out through portal blocks or exit portal doors, this tick
+    private static final Map<ItemEntity, ItemEntry> PENDING_ITEM_ENTRIES = new LinkedHashMap<>();
+    private static final Set<ItemEntity> PENDING_ITEM_EXITS = new LinkedHashSet<>();
+
+    private record ItemEntry(ServerWorld world, BlockPos pos) {
+    }
+
+    // An item that has just gone through a pocket block won't go through another until it's picked up (thrown again,
+    // it's a new item). Otherwise one coming out on top of an open suitcase would fall straight back in.
+    private static final String TRAVELED_TAG = "pocket_repose.traveled";
+
+    public static boolean hasTraveled(Entity entity) {
+        return entity.getCommandTags().contains(TRAVELED_TAG);
+    }
+
+    public static void markTraveled(Entity entity) {
+        entity.addCommandTag(TRAVELED_TAG);
+    }
+
+    /** An item thrown onto an open pocket block (or the lower half of a pocket door) at pos goes in at the end of the tick. */
+    public static void requestItemEntry(ItemEntity item, ServerWorld world, BlockPos pos) {
+        if (!hasTraveled(item)) PENDING_ITEM_ENTRIES.putIfAbsent(item, new ItemEntry(world, pos.toImmutable()));
+    }
+
+    /** An item thrown into a portal block or exit portal door in a pocket dimension leaves it at the end of the tick. */
+    public static void requestItemExit(ItemEntity item) {
+        if (!hasTraveled(item)) PENDING_ITEM_EXITS.add(item);
     }
 
     private PocketTravelHandler() {
@@ -94,17 +126,34 @@ public final class PocketTravelHandler {
         }
         PENDING_EXITS.clear();
 
-        // Mobs that fall off the bottom of a pocket dimension leave it too
+        // Items thrown out through a portal block or an exit portal door
+        List<ItemEntity> leaving = new ArrayList<>(PENDING_ITEM_EXITS);
+        PENDING_ITEM_EXITS.clear();
+        for (ItemEntity item : leaving) {
+            if (!item.isAlive() || !(item.getWorld() instanceof ServerWorld world) || !PocketPortalBlock.isPocketDimension(world)) continue;
+            world.playSound(null, item.getX(), item.getY(), item.getZ(), SoundEvents.ITEM_BUNDLE_DROP_CONTENTS, SoundCategory.PLAYERS, 1F, 1F);
+            markTraveled(item);
+            PocketRepose.releaseItem(world, item);
+        }
+
+        // Mobs and items that fall off the bottom of a pocket dimension leave it too
         for (ServerWorld world : server.getWorlds()) {
             if (!PocketPortalBlock.isPocketDimension(world)) continue;
-            List<LivingEntity> fallen = new ArrayList<>();
+            List<Entity> fallen = new ArrayList<>();
             for (Entity entity : world.iterateEntities()) {
-                if (entity instanceof LivingEntity mob && !(entity instanceof PlayerEntity) && mob.isAlive()
-                        && mob.getY() < world.getBottomY()) {
-                    fallen.add(mob);
+                boolean mob = entity instanceof LivingEntity && !(entity instanceof PlayerEntity);
+                if ((mob || entity instanceof ItemEntity) && entity.isAlive() && entity.getY() < world.getBottomY()) {
+                    fallen.add(entity);
                 }
             }
-            fallen.forEach(mob -> PocketRepose.releaseFallenMob(world, mob));
+            for (Entity entity : fallen) {
+                if (entity instanceof ItemEntity item) {
+                    markTraveled(item);
+                    PocketRepose.releaseItem(world, item);
+                } else {
+                    PocketRepose.releaseFallenMob(world, (LivingEntity) entity);
+                }
+            }
         }
 
         // After exits, so a player who left this tick doesn't also enter a suitcase from the pocket they left
@@ -114,6 +163,11 @@ public final class PocketTravelHandler {
             ServerPlayerEntity player = server.getPlayerManager().getPlayer(uuid);
             if (player != null) SuitcaseBlock.enterSuitcase(player, entry.world(), entry.pos(), entry.from());
         });
+
+        // Items thrown into pocket blocks
+        Map<ItemEntity, ItemEntry> items = new LinkedHashMap<>(PENDING_ITEM_ENTRIES);
+        PENDING_ITEM_ENTRIES.clear();
+        items.forEach((item, entry) -> SuitcaseBlock.sendItemIn(item, entry.world(), entry.pos()));
 
         Map<UUID, Vec3d> positions = new HashMap<>();
         for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {

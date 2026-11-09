@@ -25,6 +25,7 @@
 	"mixins": [
 		"pocket-repose.mixins.json"
 	],
+	"accessWidener": "fantasy.accesswidener",
 	"depends": {
 		"fabricloader": ">=0.16.9",
 		"minecraft": "~1.20.1",
