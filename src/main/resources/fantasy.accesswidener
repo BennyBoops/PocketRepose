@@ -3,3 +3,7 @@ accessWidener v1 named
 accessible class net/minecraft/server/world/ThreadedAnvilChunkStorage$EntityTracker
 
 accessible field net/minecraft/world/GameRules$IntRule value I
+
+# The pocket door doorway's render layer (client/DoorwayRenderer)
+accessible method net/minecraft/client/render/RenderLayer of (Ljava/lang/String;Lnet/minecraft/client/render/VertexFormat;Lnet/minecraft/client/render/VertexFormat$DrawMode;ILnet/minecraft/client/render/RenderLayer$MultiPhaseParameters;)Lnet/minecraft/client/render/RenderLayer$MultiPhase;
+accessible class net/minecraft/client/render/RenderLayer$MultiPhase

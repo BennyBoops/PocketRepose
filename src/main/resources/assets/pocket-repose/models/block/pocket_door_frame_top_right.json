@@ -1,0 +1,134 @@
+{
+  "ambientocclusion": false,
+  "textures": {
+    "particle": "#top"
+  },
+  "elements": [
+    {
+      "from": [
+        0,
+        0,
+        0
+      ],
+      "to": [
+        3,
+        16,
+        1
+      ],
+      "faces": {
+        "west": {
+          "uv": [
+            16,
+            0,
+            15,
+            16
+          ],
+          "texture": "#top",
+          "cullface": "west"
+        },
+        "east": {
+          "uv": [
+            15,
+            0,
+            16,
+            16
+          ],
+          "texture": "#top"
+        },
+        "north": {
+          "uv": [
+            3,
+            0,
+            0,
+            16
+          ],
+          "texture": "#top",
+          "cullface": "north"
+        },
+        "south": {
+          "uv": [
+            0,
+            0,
+            3,
+            16
+          ],
+          "texture": "#top"
+        },
+        "up": {
+          "uv": [
+            15,
+            0,
+            16,
+            3
+          ],
+          "texture": "#top",
+          "rotation": 270,
+          "cullface": "up"
+        }
+      }
+    },
+    {
+      "from": [
+        0,
+        15,
+        1
+      ],
+      "to": [
+        3,
+        16,
+        13
+      ],
+      "faces": {
+        "west": {
+          "uv": [
+            15,
+            0,
+            3,
+            1
+          ],
+          "texture": "#top",
+          "cullface": "west"
+        },
+        "east": {
+          "uv": [
+            3,
+            0,
+            15,
+            1
+          ],
+          "texture": "#top"
+        },
+        "up": {
+          "uv": [
+            3,
+            0,
+            15,
+            3
+          ],
+          "texture": "#top",
+          "rotation": 270,
+          "cullface": "up"
+        },
+        "down": {
+          "uv": [
+            15,
+            0,
+            3,
+            3
+          ],
+          "texture": "#top",
+          "rotation": 270
+        },
+        "south": {
+          "uv": [
+            0,
+            0,
+            3,
+            1
+          ],
+          "texture": "#top"
+        }
+      }
+    }
+  ]
+}

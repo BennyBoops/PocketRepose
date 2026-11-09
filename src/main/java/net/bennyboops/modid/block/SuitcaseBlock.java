@@ -1,5 +1,6 @@
 package net.bennyboops.modid.block;
 
+import java.util.EnumSet;
 import net.bennyboops.modid.PocketRepose;
 import net.bennyboops.modid.block.entity.SuitcaseBlockEntity;
 import net.bennyboops.modid.data.PlayerEntryData;
@@ -12,6 +13,7 @@ import net.bennyboops.modid.world.RuntimeWorldHandle;
 import net.minecraft.block.*;
 import net.minecraft.block.entity.BlockEntity;
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.ItemEntity;
 import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemConvertible;
@@ -288,6 +290,13 @@ public class SuitcaseBlock extends BlockWithEntity {
     @Override
     public void onEntityCollision(BlockState state, World world, BlockPos pos, Entity entity) {
         if (world.isClient) return;
+        // An item thrown onto the open block goes in (at the end of the tick, like players)
+        if (entity instanceof ItemEntity item) {
+            if (state.get(OPEN) && canEnterFrom(state, world, pos, item)) {
+                PocketTravelHandler.requestItemEntry(item, (ServerWorld) world, pos);
+            }
+            return;
+        }
         if (!(entity instanceof ServerPlayerEntity player)) return;
         if (!state.get(OPEN) || !player.isSneaking()) return;
         if (!canEnterFrom(state, world, pos, player)) return;
@@ -339,6 +348,33 @@ public class SuitcaseBlock extends BlockWithEntity {
     private static boolean isOpenEntrance(BlockState state) {
         return (state.getBlock() instanceof SuitcaseBlock && state.get(OPEN))
                 || (state.getBlock() instanceof PocketDoorBlock && state.get(DoorBlock.OPEN));
+    }
+
+    /**
+     * Sends an item into the pocket dimension of the open pocket block at pos (a pocket door's lower half), to the
+     * player entry point, if a player could go in that way.
+     */
+    public static void sendItemIn(ItemEntity item, ServerWorld world, BlockPos pos) {
+        if (!item.isAlive() || item.getWorld() != world || PocketTravelHandler.hasTraveled(item)) return;
+        BlockState state = world.getBlockState(pos);
+        if (!isOpenEntrance(state) || !(world.getBlockEntity(pos) instanceof SuitcaseBlockEntity suitcase)) return;
+
+        String key = suitcase.getBoundKeystoneName();
+        if (key == null || !suitcase.canOpenInDimension(world)) return;
+        boolean dimensionAllowed = world.getRegistryKey() == World.NETHER ? PocketRepose.getAllowInNether()
+                : world.getRegistryKey() != World.END || PocketRepose.getAllowInEnd();
+        if (!dimensionAllowed) return;
+        if (PocketPortalBlock.isPocketDimension(world) && !PocketRepose.getAllowRecursion()) return;
+
+        ServerWorld target = ensureDimensionExists(world.getServer(), key, new Identifier("pocket-repose", "pocket_dimension_" + key));
+        if (target == null) return;
+
+        world.playSound(null, item.getX(), item.getY(), item.getZ(), SoundEvents.ITEM_BUNDLE_DROP_CONTENTS, SoundCategory.PLAYERS, 1F, 1F);
+        PocketTravelHandler.markTraveled(item);
+        Vec3d dest = PlayerEntryData.get(target).getEntryPos();
+        item.setVelocity(Vec3d.ZERO);
+        item.teleport(target, dest.x, dest.y, dest.z, EnumSet.noneOf(PositionFlag.class), item.getYaw(), item.getPitch());
+        target.playSound(null, dest.x, dest.y, dest.z, SoundEvents.ITEM_BUNDLE_DROP_CONTENTS, SoundCategory.PLAYERS, 1F, 1F);
     }
 
     /**
