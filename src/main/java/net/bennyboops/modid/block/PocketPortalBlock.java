@@ -57,6 +57,11 @@ public class PocketPortalBlock extends Block {
     @Override
     public void onEntityCollision(BlockState state, World world, BlockPos pos, Entity entity) {
         if (world.isClient) return;
+        // Items thrown into it leave the pocket dimension like released mobs
+        if (entity instanceof ItemEntity item) {
+            if (isPocketDimension(world)) PocketTravelHandler.requestItemExit(item);
+            return;
+        }
         if (!(entity instanceof ServerPlayerEntity player)) return;
         if (!isPocketDimension(world)) return;
 
