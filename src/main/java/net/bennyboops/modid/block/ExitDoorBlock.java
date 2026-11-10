@@ -12,6 +12,7 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.client.item.TooltipContext;
 import net.minecraft.world.BlockView;
+import net.minecraft.loot.context.LootContextParameterSet;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.server.world.ServerWorld;
 import net.minecraft.sound.BlockSoundGroup;
@@ -20,6 +21,7 @@ import net.minecraft.util.math.BlockPos;
 
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Collections;
 import java.util.List;
 import org.jetbrains.annotations.Nullable;
 
@@ -63,5 +65,13 @@ public class ExitDoorBlock extends DoorwayBlock implements BlockEntityProvider {
     @Override
     public void appendTooltip(ItemStack stack, @Nullable BlockView world, List<Text> tooltip, TooltipContext options) {
         tooltip.add(PocketPortalBlock.exitTooltip());
+    }
+
+    // Exit doors have no loot table, so they drop themselves here. Only the lower half drops, which also covers
+    // breaking the upper half (the lower half then breaks with it), so a door never drops twice
+    @Override
+    public List<ItemStack> getDroppedStacks(BlockState state, LootContextParameterSet.Builder builder) {
+        if (state.get(HALF) != DoubleBlockHalf.LOWER) return Collections.emptyList();
+        return Collections.singletonList(new ItemStack(this));
     }
 }
