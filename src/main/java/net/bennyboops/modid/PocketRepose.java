@@ -1,5 +1,13 @@
 package net.bennyboops.modid;
 
+import net.bennyboops.modid.compat.SableCompat;
+import net.bennyboops.modid.config.PocketReposeConfig;
+import net.bennyboops.modid.config.ConfigNetwork;
+import net.neoforged.fml.loading.FMLPaths;
+import net.bennyboops.modid.data.SuitcaseFinder;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
+import net.neoforged.bus.api.EventPriority;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.FloatArgumentType;
 import net.minecraft.command.CommandSource;
@@ -74,7 +82,6 @@ import net.minecraft.util.Identifier;
 import net.minecraft.util.TypedActionResult;
 import net.minecraft.util.WorldSavePath;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.TeleportTarget;
@@ -129,10 +136,15 @@ public class PocketRepose {
 			MinecraftServer server = startedEvent.getServer();
 			SuitcaseRegistrySavedData.onServerStart(server);
 			PocketReposeSettingsData.onServerStart(server);
+			SableCompat.available();
 		});
 
 		PortalChunkHandler.initialize();
 		PocketTravelHandler.initialize();
+
+		// Settings: a config file per world, kept in sync with the players' config screens
+		PocketReposeConfig.configDir = FMLPaths.CONFIGDIR.get();
+		ConfigNetwork.init(modEventBus);
 
 		registerPocketCommands();
 		registerSuitcaseMobTeleport();
@@ -163,6 +175,16 @@ public class PocketRepose {
 				LOGGER.error("Failed to reload pocket dimensions", e);
 			}
 		});
+
+		// Remember dropped items holding suitcases as they load and unload, instead of searching for them.
+		// Last, so an item whose joining another mod cancels is never remembered
+		NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, false, EntityJoinLevelEvent.class, joinEvent -> {
+			if (joinEvent.getEntity() instanceof ItemEntity item) SuitcaseFinder.onItemLoaded(item);
+		});
+		NeoForge.EVENT_BUS.addListener((EntityLeaveLevelEvent leaveEvent) -> {
+			if (leaveEvent.getEntity() instanceof ItemEntity item) SuitcaseFinder.onItemUnloaded(item);
+		});
+		NeoForge.EVENT_BUS.addListener((ServerStoppedEvent stoppedEvent) -> SuitcaseFinder.clear());
 
 		// Fabric's AFTER_ENTITY_CHANGE_WORLD equivalent: track suitcase items arriving in a world
 		NeoForge.EVENT_BUS.addListener((EntityJoinLevelEvent joinEvent) -> {
@@ -222,175 +244,38 @@ public class PocketRepose {
 
 		NeoForge.EVENT_BUS.addListener((ServerTickEvent.Post tickEvent) -> {
 			MinecraftServer server = tickEvent.getServer();
+			if (server.getTicks() % 20 != 0) return;
 			SuitcaseLocationTracker tracker = SuitcaseLocationTracker.get(server);
 			if (tracker == null) return;
 
-			long ticks = server.getTicks();
-
-			if (ticks % 20 == 0) {
-				for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-					String dimStr = player.getServerWorld().getRegistryKey().getValue().toString();
-					for (int i = 0; i < player.getInventory().size(); i++) {
-						ItemStack stack = player.getInventory().getStack(i);
-						scanStackRecursivelyForSuitcases(
-								tracker,
-								stack,
-								dimStr,
-								player.getX(), player.getY() + 1.0, player.getZ(),
-								player.getYaw(), player.getPitch(),
-								MAX_NESTED_CONTAINER_DEPTH
-						);
-
-					}
-				}
-			}
-
-			if (ticks % 40 == 0) {
-				for (ServerWorld w : server.getWorlds()) {
-					String dimStr = w.getRegistryKey().getValue().toString();
-
-					Box searchBox = new Box(
-							w.getWorldBorder().getCenterX() - w.getWorldBorder().getSize() / 2,
-							w.getBottomY(),
-							w.getWorldBorder().getCenterZ() - w.getWorldBorder().getSize() / 2,
-							w.getWorldBorder().getCenterX() + w.getWorldBorder().getSize() / 2,
-							w.getTopY(),
-							w.getWorldBorder().getCenterZ() + w.getWorldBorder().getSize() / 2
+			// Suitcases carried by players move with them, so inventories are still checked every second (cheap)
+			for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
+				String dimStr = player.getServerWorld().getRegistryKey().getValue().toString();
+				for (int i = 0; i < player.getInventory().size(); i++) {
+					ItemStack stack = player.getInventory().getStack(i);
+					scanStackRecursivelyForSuitcases(
+							tracker,
+							stack,
+							dimStr,
+							player.getX(), player.getY() + 1.0, player.getZ(),
+							player.getYaw(), player.getPitch(),
+							MAX_NESTED_CONTAINER_DEPTH
 					);
-
-					List<ItemEntity> itemEntities = w.getEntitiesByClass(
-							ItemEntity.class,
-							searchBox,
-							itemEntity -> {
-								ItemStack st = itemEntity.getStack();
-								if (st.isEmpty()) return false;
-
-								if (st.getItem() instanceof BlockItem b && SuitcaseBlock.isPocketBlock(b.getBlock())) return true;
-
-								return StackData.hasContainedStacks(st);
-							}
-					);
-
-					for (ItemEntity item : itemEntities) {
-						scanStackRecursivelyForSuitcases(
-								tracker,
-								item.getStack(),
-								dimStr,
-								item.getX(), item.getY() + 1.0, item.getZ(),
-								0, 0,
-								MAX_NESTED_CONTAINER_DEPTH
-						);
-					}
-
 				}
 			}
 
-			if (ticks % 100 == 0) {
-				for (ServerWorld w : server.getWorlds()) {
-					if (!w.getRegistryKey().equals(World.OVERWORLD)
-							&& !w.getRegistryKey().equals(World.NETHER)
-							&& !w.getRegistryKey().equals(World.END)) {
-						continue;
-					}
-
-					for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-						if (!player.getServerWorld().equals(w)) continue;
-
-						ChunkPos playerChunk = player.getChunkPos();
-						int radius = 8;
-
-						for (int cx = playerChunk.x - radius; cx <= playerChunk.x + radius; cx++) {
-							for (int cz = playerChunk.z - radius; cz <= playerChunk.z + radius; cz++) {
-								if (!w.isChunkLoaded(cx, cz)) continue;
-
-								WorldChunk chunk = w.getChunk(cx, cz);
-								for (BlockEntity be : chunk.getBlockEntities().values()) {
-									scanContainerForSuitcases(tracker, be, w);
-								}
-							}
-						}
-					}
-				}
-			}
+			// Dropped suitcases are tracked as they load and unload, and suitcases in containers are looked
+			// up when someone leaves a pocket dimension (see SuitcaseFinder), so nothing else is scanned here
 		});
 	}
 	private static final int MAX_NESTED_CONTAINER_DEPTH = 4;
-	private static void scanStackRecursivelyForSuitcases(SuitcaseLocationTracker tracker, ItemStack stack, String dimStr, double x, double y, double z, float yaw, float pitch, int depth) {
+	public static void scanStackRecursivelyForSuitcases(SuitcaseLocationTracker tracker, ItemStack stack, String dimStr, double x, double y, double z, float yaw, float pitch, int depth) {
 		if (stack.isEmpty() || depth <= 0) return;
 
 		updateSuitcaseLocationFromItem(tracker, stack, dimStr, x, y, z, yaw, pitch);
 
 		for (ItemStack inner : StackData.getContainedStacks(stack)) {
 			scanStackRecursivelyForSuitcases(tracker, inner, dimStr, x, y, z, yaw, pitch, depth - 1);
-		}
-	}
-	private static void scanContainerForSuitcases(SuitcaseLocationTracker tracker, BlockEntity blockEntity, ServerWorld world) {
-		if (!(blockEntity instanceof Inventory inventory)) return;
-
-		BlockPos containerPos = blockEntity.getPos();
-		String dimStr = world.getRegistryKey().getValue().toString();
-
-		for (int i = 0; i < inventory.size(); i++) {
-			ItemStack stack = inventory.getStack(i);
-
-			scanStackRecursivelyForSuitcases(
-					tracker,
-					stack,
-					dimStr,
-					containerPos.getX() + 0.5,
-					containerPos.getY() + 1.0,
-					containerPos.getZ() + 0.5,
-					0, 0,
-					MAX_NESTED_CONTAINER_DEPTH
-			);
-
-			if (stack.isEmpty()) continue;
-
-			if (!(stack.getItem() instanceof BlockItem bi) || !SuitcaseBlock.isPocketBlock(bi.getBlock())) continue;
-
-			NbtComponent beData = stack.get(DataComponentTypes.BLOCK_ENTITY_DATA);
-			if (beData == null) continue;
-
-			NbtCompound nbt = beData.copyNbt();
-			String keystone = nbt.getString("BoundKeystone");
-			if (keystone.isEmpty()) continue;
-
-			UUID suitcaseId = null;
-			if (nbt.containsUuid(SuitcaseBlockEntity.NBT_SUITCASE_ID)) {
-				suitcaseId = nbt.getUuid(SuitcaseBlockEntity.NBT_SUITCASE_ID);
-			}
-
-			if (suitcaseId != null) {
-				tracker.updateSuitcaseLocation(
-						suitcaseId,
-						dimStr,
-						containerPos.getX() + 0.5,
-						containerPos.getY() + 1.0,
-						containerPos.getZ() + 0.5,
-						SuitcaseLocationTracker.LocationType.ITEM_ENTITY
-				);
-			}
-
-			if (!nbt.contains("EnteredPlayers", NbtElement.LIST_TYPE)) continue;
-
-			NbtList players = nbt.getList("EnteredPlayers", NbtElement.COMPOUND_TYPE);
-			for (int j = 0; j < players.size(); j++) {
-				NbtCompound p = players.getCompound(j);
-				String uuid = p.getString("UUID");
-
-				tracker.updateLocation(
-						keystone,
-						uuid,
-						dimStr,
-						suitcaseId,
-						containerPos.getX() + 0.5,
-						containerPos.getY() + 1.0,
-						containerPos.getZ() + 0.5,
-						0, 0,
-						SuitcaseLocationTracker.LocationType.ITEM_ENTITY
-				);
-			}
-
 		}
 	}
 	private static void updateSuitcaseLocationFromItem(SuitcaseLocationTracker tracker, ItemStack stack, String dimStr, double x, double y, double z, float yaw, float pitch) {
@@ -1305,6 +1190,7 @@ public class PocketRepose {
 											 String keystoneName, String playerUuid) {
 		SuitcaseLocationTracker tracker = SuitcaseLocationTracker.get(server);
 		UUID expectedSuitcaseId = (tracker == null) ? null : tracker.getLastSuitcase(keystoneName, playerUuid);
+		SuitcaseFinder.refresh(server, tracker, keystoneName, expectedSuitcaseId, pocketWorld);
 
 		boolean teleported = false;
 		ServerWorld targetWorldUsed = null;
@@ -1428,7 +1314,8 @@ public class PocketRepose {
 	private static boolean teleportMobTo(Entity mob, ServerWorld targetWorld, Vec3d pos) {
 		TeleportTarget target = new TeleportTarget(
 				targetWorld,
-				pos,
+				// A suitcase on a Sable physics object is tracked where Sable keeps the object's blocks
+				SableCompat.toWorld(targetWorld, pos),
 				Vec3d.ZERO,
 				mob.getYaw(),
 				mob.getPitch(),
@@ -1479,22 +1366,11 @@ public class PocketRepose {
 			}
 		}
 
-		for (ServerWorld w : server.getWorlds()) {
-			if (w == pocketWorld) continue;
-			for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
-				if (p.getServerWorld() != w) continue;
-
-				Box box = p.getBoundingBox().expand(256);
-				List<ItemEntity> items = w.getEntitiesByClass(ItemEntity.class, box,
-						item -> isSuitcaseWithKeystoneAndId(item.getStack(), keystoneName, expectedSuitcaseId));
-
-				if (!items.isEmpty()) {
-					ItemEntity suitcaseItem = items.get(0);
-					Vec3d dest = new Vec3d(suitcaseItem.getX(), suitcaseItem.getY() + 1.0, suitcaseItem.getZ());
-					teleportMobTo(mob, w, dest);
-					return new TeleportResult(true, w, dest);
-				}
-			}
+		ItemEntity suitcaseItem = SuitcaseFinder.findItem(keystoneName, expectedSuitcaseId, pocketWorld);
+		if (suitcaseItem != null && suitcaseItem.getWorld() instanceof ServerWorld w) {
+			Vec3d dest = new Vec3d(suitcaseItem.getX(), suitcaseItem.getY() + 1.0, suitcaseItem.getZ());
+			teleportMobTo(mob, w, dest);
+			return new TeleportResult(true, w, dest);
 		}
 
 		for (ServerPlayerEntity online : server.getPlayerManager().getPlayerList()) {
