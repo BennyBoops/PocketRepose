@@ -1,5 +1,6 @@
 package net.bennyboops.modid;
 
+import net.bennyboops.modid.client.ConfigClientNetwork;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import net.bennyboops.modid.block.ModBlocks;
 import net.bennyboops.modid.block.entity.ModBlockEntities;
@@ -30,6 +31,8 @@ public final class PocketReposeClient {
     }
 
     public static void init(IEventBus modEventBus) {
+        // Settings sync, and the config button in the mods list
+        ConfigClientNetwork.init();
         modEventBus.addListener((FMLClientSetupEvent event) -> event.enqueueWork(() -> {
             // Door textures have see-through windows
             for (Block door : ModBlocks.POCKET_DOORS) RenderLayers.setRenderLayer(door, RenderLayer.getCutout());
