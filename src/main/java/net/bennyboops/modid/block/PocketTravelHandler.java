@@ -1,5 +1,6 @@
 package net.bennyboops.modid.block;
 
+import net.bennyboops.modid.config.PocketReposeConfig;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
 import net.bennyboops.modid.PocketRepose;
@@ -109,6 +110,7 @@ public final class PocketTravelHandler {
     }
 
     private static void tick(MinecraftServer server) {
+        PocketReposeConfig.tick(server);
         List<ServerPlayerEntity> players = new ArrayList<>(server.getPlayerManager().getPlayerList());
         for (ServerPlayerEntity player : players) {
             ServerWorld world = player.getServerWorld();
@@ -139,9 +141,11 @@ public final class PocketTravelHandler {
             PocketRepose.releaseItem(world, item);
         }
 
-        // Mobs and items that fall off the bottom of a pocket dimension leave it too
+        // Mobs and items that fall off the bottom of a pocket dimension leave it too. Checked every 10 ticks:
+        // nothing falls far enough in that time to reach the void below the world, where it would be lost
+        boolean checkFalls = server.getTicks() % 10 == 0;
         for (ServerWorld world : server.getWorlds()) {
-            if (!PocketPortalBlock.isPocketDimension(world)) continue;
+            if (!checkFalls || !PocketPortalBlock.isPocketDimension(world)) continue;
             List<Entity> fallen = new ArrayList<>();
             for (Entity entity : world.iterateEntities()) {
                 boolean mob = entity instanceof LivingEntity && !(entity instanceof PlayerEntity);

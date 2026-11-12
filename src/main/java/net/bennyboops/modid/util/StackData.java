@@ -45,9 +45,9 @@ public final class StackData {
      * Items stored inside a container item: shulker boxes (BlockEntityTag.Items) and bundles (Items).
      */
     public static List<ItemStack> getContainedStacks(ItemStack stack) {
-        List<ItemStack> result = new ArrayList<>();
         NbtCompound nbt = stack.getNbt();
-        if (nbt == null) return result;
+        if (nbt == null) return List.of();
+        List<ItemStack> result = new ArrayList<>();
 
         NbtCompound beTag = BlockItem.getBlockEntityNbt(stack);
         if (beTag != null) addItems(beTag.getList("Items", NbtElement.COMPOUND_TYPE), result);

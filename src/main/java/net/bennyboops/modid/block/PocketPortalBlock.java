@@ -1,5 +1,7 @@
 package net.bennyboops.modid.block;
 
+import net.bennyboops.modid.compat.SableCompat;
+import net.bennyboops.modid.data.SuitcaseFinder;
 import java.util.UUID;
 import org.jetbrains.annotations.Nullable;
 import java.util.List;
@@ -32,7 +34,6 @@ import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
 import net.minecraft.util.Identifier;
 import net.minecraft.util.math.BlockPos;
-import net.minecraft.util.math.Box;
 import net.minecraft.util.math.ChunkPos;
 import net.minecraft.util.math.Vec3d;
 import net.minecraft.world.World;
@@ -118,6 +119,8 @@ public class PocketPortalBlock extends Block {
         SuitcaseLocationTracker tracker = SuitcaseLocationTracker.get(server);
 
         UUID expectedSuitcaseId = (tracker == null) ? null : tracker.getLastSuitcase(keystoneName, playerUuid);
+        // Where the suitcase is right now, if it's being carried, lies dropped, or was put in a container
+        SuitcaseFinder.refresh(server, tracker, keystoneName, expectedSuitcaseId, pocketWorld);
 
         boolean teleported = false;
 
@@ -176,30 +179,16 @@ public class PocketPortalBlock extends Block {
         }
 
 
-        //Method 3: Dropped items near players
+        //Method 3: Dropped items
         if (!teleported && expectedSuitcaseId != null) {
-            for (ServerWorld w : server.getWorlds()) {
-                if (w == pocketWorld) continue;
-                for (ServerPlayerEntity p : server.getPlayerManager().getPlayerList()) {
-                    if (p.getServerWorld() != w) continue;
-
-                    Box box = p.getBoundingBox().expand(256);
-                    List<ItemEntity> items = w.getEntitiesByClass(ItemEntity.class, box,
-                            item -> isSuitcaseWithKeystoneAndId(item.getStack(), keystoneName, expectedSuitcaseId));
-
-                    if (!items.isEmpty()) {
-                        ItemEntity suitcaseItem = items.get(0);
-                        cleanUpSuitcaseItemNbt(suitcaseItem.getStack(), player, keystoneName);
-                        suitcaseItem.setStack(suitcaseItem.getStack());
-
-                        teleportToPosition(player, w,
-                                suitcaseItem.getX(), suitcaseItem.getY() + 1.0, suitcaseItem.getZ(),
-                                player.getYaw(), player.getPitch());
-                        teleported = true;
-                        break;
-                    }
-                }
-                if (teleported) break;
+            ItemEntity suitcaseItem = SuitcaseFinder.findItem(keystoneName, expectedSuitcaseId, pocketWorld);
+            if (suitcaseItem != null && suitcaseItem.getWorld() instanceof ServerWorld w) {
+                cleanUpSuitcaseItemNbt(suitcaseItem.getStack(), player, keystoneName);
+                suitcaseItem.setStack(suitcaseItem.getStack());
+                teleportToPosition(player, w,
+                        suitcaseItem.getX(), suitcaseItem.getY() + 1.0, suitcaseItem.getZ(),
+                        player.getYaw(), player.getPitch());
+                teleported = true;
             }
         }
 
@@ -330,7 +319,10 @@ public class PocketPortalBlock extends Block {
     //Exact teleport
     private static void teleportToPosition(ServerPlayerEntity player, ServerWorld targetWorld,
                                            double x, double y, double z, float yaw, float pitch) {
-        player.teleport(targetWorld, x, y, z, yaw, pitch);
+        // A suitcase on a Sable physics object is tracked where Sable keeps the object's blocks, far from where it is
+        Vec3d tracked = new Vec3d(x, y, z);
+        Vec3d at = SableCompat.toWorld(targetWorld, tracked);
+        player.teleport(targetWorld, at.x, at.y, at.z, SableCompat.toWorldYaw(targetWorld, tracked, yaw), pitch);
         player.setVelocity(Vec3d.ZERO);
         player.fallDistance = 0f;
     }
@@ -390,7 +382,7 @@ public class PocketPortalBlock extends Block {
         }
     }
 
-    private static boolean containsSuitcaseWithKeystoneAndId(ItemStack stack, String keystone, UUID id, int depth) {
+    public static boolean containsSuitcaseWithKeystoneAndId(ItemStack stack, String keystone, UUID id, int depth) {
         if (depth <= 0 || stack.isEmpty()) return false;
 
         if (isSuitcaseWithKeystoneAndId(stack, keystone, id)) return true;
