@@ -5,6 +5,7 @@ import net.bennyboops.modid.block.entity.ModBlockEntities;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import net.bennyboops.modid.client.DoorwayBlockEntityRenderer;
 import net.bennyboops.modid.client.HallwayRenderer;
+import net.bennyboops.modid.client.ConfigClientNetwork;
 import net.bennyboops.modid.client.HallwaySettings;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandManager;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
@@ -24,6 +25,7 @@ import net.minecraft.util.Identifier;
 public class PocketReposeClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
+        ConfigClientNetwork.init();
         BlockEntityRendererFactories.register(ModBlockEntities.SUITCASE_BLOCK_ENTITY, PocketBlockEntityRenderer::new);
         BlockEntityRendererFactories.register(ModBlockEntities.DOORWAY_BLOCK_ENTITY, DoorwayBlockEntityRenderer::new);
         // The shader that draws open pocket blocks as a dark hallway
