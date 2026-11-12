@@ -1,5 +1,6 @@
 package net.bennyboops.modid;
 
+import net.bennyboops.modid.client.ConfigClientNetwork;
 import net.bennyboops.modid.block.ModBlocks;
 import net.bennyboops.modid.block.entity.ModBlockEntities;
 import com.mojang.brigadier.arguments.BoolArgumentType;
@@ -24,6 +25,7 @@ import net.minecraft.util.Identifier;
 public class PocketReposeClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
+        ConfigClientNetwork.init();
         BlockEntityRendererFactories.register(ModBlockEntities.SUITCASE_BLOCK_ENTITY, PocketBlockEntityRenderer::new);
         BlockEntityRendererFactories.register(ModBlockEntities.DOORWAY_BLOCK_ENTITY, DoorwayBlockEntityRenderer::new);
         // The shader that draws open pocket blocks as a dark hallway

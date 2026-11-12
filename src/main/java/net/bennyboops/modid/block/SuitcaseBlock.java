@@ -1,5 +1,7 @@
 package net.bennyboops.modid.block;
 
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.ServerTask;
 import java.util.EnumSet;
 import net.bennyboops.modid.PocketRepose;
 import net.bennyboops.modid.block.entity.SuitcaseBlockEntity;
@@ -109,6 +111,38 @@ public class SuitcaseBlock extends BlockWithEntity {
      * Loads a placed suitcase's data from its item and records where its travelers come back out
      * (on top of a suitcase, in front of a pocket door).
      */
+    /**
+     * A placed pocket block that turns up away from where its suitcase is tracked (moved by another mod, such as
+     * Sable assembling it into a physics object) is tracked where it is now. Ones that were picked up since, and
+     * blocks that are just loading where they were placed, are left alone.
+     */
+    public static void retrackIfMoved(ServerWorld world, BlockPos pos) {
+        if (!(world.getBlockEntity(pos) instanceof SuitcaseBlockEntity suitcase) || suitcase.isRemoved()) return;
+        String key = suitcase.getBoundKeystoneName();
+        SuitcaseLocationTracker tracker = SuitcaseLocationTracker.get(world.getServer());
+        if (key == null || tracker == null) return;
+
+        BlockState state = world.getBlockState(pos);
+        Vec3d exit;
+        if (state.getBlock() instanceof PocketDoorBlock door) exit = door.exitPoint(state, pos, Vec3d.ofCenter(pos));
+        else if (state.getBlock() instanceof SuitcaseBlock) exit = exitOnTop(state, world, pos);
+        else return;
+
+        String dimStr = world.getRegistryKey().getValue().toString();
+        SuitcaseLocationTracker.SuitcaseInstanceLocation known = tracker.getSuitcaseLocation(suitcase.getSuitcaseId());
+        if (known != null) {
+            if (known.type != SuitcaseLocationTracker.LocationType.BLOCK) return;
+            if (dimStr.equals(known.dimensionId) && exit.squaredDistanceTo(known.x, known.y, known.z) < 9) return;
+        }
+
+        tracker.updateSuitcaseLocation(suitcase.getSuitcaseId(), dimStr, exit.x, exit.y, exit.z,
+                SuitcaseLocationTracker.LocationType.BLOCK);
+        for (SuitcaseBlockEntity.EnteredPlayerData p : suitcase.getEnteredPlayers()) {
+            tracker.updateLocation(key, p.uuid, dimStr, suitcase.getSuitcaseId(),
+                    exit.x, exit.y, exit.z, p.yaw, 0f, SuitcaseLocationTracker.LocationType.BLOCK);
+        }
+    }
+
     public static void trackPlacedSuitcase(World world, SuitcaseBlockEntity suitcase, ItemStack stack, Vec3d exit) {
         NbtCompound tag = StackData.getBlockEntityData(stack);
         if (tag != null) {
@@ -142,10 +176,28 @@ public class SuitcaseBlock extends BlockWithEntity {
         if (!state.isOf(newState.getBlock())) {
             BlockEntity be = world.getBlockEntity(pos);
             if (be instanceof SuitcaseBlockEntity suitcase) {
-                ItemScatterer.spawn(world, pos.getX(), pos.getY(), pos.getZ(), droppedStack(this, suitcase));
+                dropUnlessMoved(world, pos, suitcase, droppedStack(this, suitcase));
             }
             world.removeBlockEntity(pos);
         }
+    }
+
+    /**
+     * Drops the item of a pocket block that's gone. Held until the end of the tick: when another mod moves the
+     * block (Sable assembling it into a physics object, for one), it turns up at its new place by then, and
+     * nothing is dropped, so the suitcase isn't duplicated.
+     */
+    public static void dropUnlessMoved(World world, BlockPos pos, SuitcaseBlockEntity suitcase, ItemStack stack) {
+        if (!(world instanceof ServerWorld serverWorld)) {
+            ItemScatterer.spawn(world, pos.getX(), pos.getY(), pos.getZ(), stack);
+            return;
+        }
+        MinecraftServer server = serverWorld.getServer();
+        long tick = server.getTicks();
+        // Queued (execute() would run it right away on the server thread)
+        server.send(new ServerTask(server.getTicks(), () -> {
+            if (!suitcase.movedElsewhere(tick)) ItemScatterer.spawn(serverWorld, pos.getX(), pos.getY(), pos.getZ(), stack);
+        }));
     }
 
     /** The item a broken pocket block drops, carrying its binding, lock and travelers. */

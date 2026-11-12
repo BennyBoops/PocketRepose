@@ -13,6 +13,8 @@ base {
 repositories {
 	maven { url = 'https://maven.nucleoid.xyz/' }
 	maven { url = 'https://repo.spongepowered.org/maven' }
+	// Mod Menu, for the config screen button in its mods list (optional for players)
+	maven { url = 'https://maven.terraformersmc.com/releases/' }
 }
 
 fabricApi {
@@ -58,6 +60,7 @@ dependencies {
 	modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
 
 	modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+	modCompileOnly "com.terraformersmc:modmenu:7.2.2"
 
 	//modImplementation include('xyz.nucleoid:fantasy:0.4.11+1.20-rc1')
 
