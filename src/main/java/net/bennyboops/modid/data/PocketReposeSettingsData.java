@@ -1,6 +1,7 @@
 package net.bennyboops.modid.data;
 
 import net.bennyboops.modid.PocketRepose;
+import net.bennyboops.modid.config.PocketReposeConfig;
 import net.minecraft.datafixer.DataFixTypes;
 import net.minecraft.entity.EntityType;
 import net.minecraft.nbt.NbtCompound;
@@ -94,10 +95,21 @@ public class PocketReposeSettingsData extends PersistentState {
 
     public static void onServerStart(MinecraftServer server) {
         PocketRepose.resetSettings();
+        // New worlds start from the defaults file; settings an older version saved with the world come next,
+        // and the world's own config file (if it has one yet) has the final say
+        PocketReposeConfig.applyDefaults();
         get(server);
+        PocketReposeConfig.loadWorld(server);
     }
 
+    /** A setting changed (by a command or the config screen): saves it and updates everyone's config screen. */
     public static void onSettingsChanged(MinecraftServer server) {
+        markChanged(server);
+        PocketReposeConfig.onChanged(server);
+    }
+
+    /** Saves the settings with the world as well, so they also survive going back to an older version. */
+    public static void markChanged(MinecraftServer server) {
         PocketReposeSettingsData data = get(server);
         if (data != null) data.markDirty();
     }

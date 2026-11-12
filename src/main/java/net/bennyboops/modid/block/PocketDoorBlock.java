@@ -161,7 +161,7 @@ public class PocketDoorBlock extends DoorwayBlock implements BlockEntityProvider
     @Override
     protected void onStateReplaced(BlockState state, World world, BlockPos pos, BlockState newState, boolean moved) {
         if (!state.isOf(newState.getBlock()) && world.getBlockEntity(pos) instanceof SuitcaseBlockEntity suitcase) {
-            ItemScatterer.spawn(world, pos.getX(), pos.getY(), pos.getZ(), SuitcaseBlock.droppedStack(this, suitcase));
+            SuitcaseBlock.dropUnlessMoved(world, pos, suitcase, SuitcaseBlock.droppedStack(this, suitcase));
         }
         super.onStateReplaced(state, world, pos, newState, moved);
     }

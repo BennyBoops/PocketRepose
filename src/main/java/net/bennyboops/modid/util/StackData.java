@@ -16,10 +16,11 @@ public final class StackData {
      * Items stored inside a container item: shulker boxes (container component) and bundles (bundle contents).
      */
     public static List<ItemStack> getContainedStacks(ItemStack stack) {
-        List<ItemStack> result = new ArrayList<>();
         ContainerComponent container = stack.get(DataComponentTypes.CONTAINER);
-        if (container != null) container.iterateNonEmpty().forEach(result::add);
         BundleContentsComponent bundle = stack.get(DataComponentTypes.BUNDLE_CONTENTS);
+        if (container == null && bundle == null) return List.of();
+        List<ItemStack> result = new ArrayList<>();
+        if (container != null) container.iterateNonEmpty().forEach(result::add);
         if (bundle != null) bundle.iterate().forEach(result::add);
         return result;
     }

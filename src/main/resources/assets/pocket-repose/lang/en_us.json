@@ -49,5 +49,33 @@
 
   "block.pocket-repose.portal": "Portal Block",
 
+  "config.pocket-repose.title": "Pocket Repose Settings",
+  "config.pocket-repose.tab.pocket_dimension": "Pocket Dimension",
+  "config.pocket-repose.tab.items": "Items",
+  "config.pocket-repose.tab.client": "Client",
+  "config.pocket-repose.subtitle.client": "Client settings",
+  "config.pocket-repose.subtitle.defaults": "Settings new worlds start with",
+  "config.pocket-repose.subtitle.world": "Must be an operator",
+  "config.pocket-repose.subtitle.operators": "Must be an operator",
+  "config.pocket-repose.subtitle.waiting": "Waiting for the server's settings",
+  "config.pocket-repose.option.allowHostileMobSpawning": "Hostile mob spawning",
+  "config.pocket-repose.option.allowPassiveMobSpawning": "Passive mob spawning",
+  "config.pocket-repose.option.allowSetSpawnPoint": "Set spawn point with beds",
+  "config.pocket-repose.option.spawnIsland": "Spawn island",
+  "config.pocket-repose.option.knockVolume": "Knock volume",
+  "config.pocket-repose.option.closeOnEntry": "Close on entry",
+  "config.pocket-repose.option.closeOnLockedEntry": "Close on locked entry",
+  "config.pocket-repose.option.allowRecursion": "Allow recursion",
+  "config.pocket-repose.option.allowInNether": "Allow in the Nether",
+  "config.pocket-repose.option.allowInEnd": "Allow in the End",
+  "config.pocket-repose.option.allowHostileMobCapture": "Hostile mob capture",
+  "config.pocket-repose.option.allowPassiveMobCapture": "Passive mob capture",
+  "config.pocket-repose.option.captureBlacklist": "Capture blacklist",
+  "config.pocket-repose.option.exitKeystoneCooldown": "Exit Keystone cooldown (seconds)",
+  "config.pocket-repose.option.exitKeystoneWorksInOverworld": "Exit Keystone in the Overworld",
+  "config.pocket-repose.option.exitKeystoneWorksInNether": "Exit Keystone in the Nether",
+  "config.pocket-repose.option.exitKeystoneWorksInEnd": "Exit Keystone in the End",
+  "config.pocket-repose.option.hallwayShader": "Bigger on the inside effect",
+
   "itemgroup.pocket": "Pocket Repose"
 }

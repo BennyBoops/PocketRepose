@@ -1,5 +1,8 @@
 package net.bennyboops.modid.block.entity;
 
+import net.minecraft.server.ServerTask;
+import net.minecraft.server.world.ServerWorld;
+import net.bennyboops.modid.block.SuitcaseBlock;
 import net.minecraft.util.math.Box;
 import net.minecraft.block.Block;
 import net.bennyboops.modid.data.SuitcaseLocationTracker;
@@ -28,6 +31,53 @@ public class SuitcaseBlockEntity extends BlockEntity {
     public UUID getSuitcaseId() {
         return suitcaseId;
     }
+
+    // The placed pocket blocks in loaded chunks, by suitcase id, to tell a block that was broken from one that
+    // another mod moved somewhere else
+    private static final Map<UUID, SuitcaseBlockEntity> PLACED = new HashMap<>();
+    // The server tick this block entity was put into the world
+    private long placedTick = -1;
+
+    /**
+     * Whether a pocket block with this suitcase id turned up somewhere else during the given tick, which is what
+     * happens when another mod moves it. (A copy placed earlier, like a creative-mode duplicate, doesn't count.)
+     */
+    public boolean movedElsewhere(long tick) {
+        SuitcaseBlockEntity other = PLACED.get(suitcaseId);
+        return other != null && other != this && !other.isRemoved() && other.placedTick >= tick;
+    }
+
+    @Override
+    public void markRemoved() {
+        super.markRemoved();
+        PLACED.remove(suitcaseId, this);
+    }
+
+    // Called whenever the block entity is put into a world: placed, loaded, or moved there by another mod (Sable
+    // assembling it into a physics object, for one). If it has moved, the way back out follows it
+    @Override
+    public void cancelRemoval() {
+        super.cancelRemoval();
+        register();
+    }
+
+    /**
+     * Notes this block entity as placed, and checks whether it has moved. Done when it's put into a world and again
+     * when its data is loaded into it, since a mod that moves blocks (Sable does) loads the data after placing it.
+     */
+    private void register() {
+        if (!(world instanceof ServerWorld serverWorld) || isRemoved()) return;
+        MinecraftServer server = serverWorld.getServer();
+        placedTick = server.getTicks();
+        PLACED.values().remove(this);
+        PLACED.put(suitcaseId, this);
+        if (boundKeystoneName != null) {
+            BlockPos at = pos.toImmutable();
+            // Queued for the end of the tick, once the block is fully in place
+            server.send(new ServerTask(server.getTicks(), () -> SuitcaseBlock.retrackIfMoved(serverWorld, at)));
+        }
+    }
+
     private String boundKeystoneName;
     private boolean isLocked = false;
     private boolean dimensionLocked = false;
@@ -235,6 +285,7 @@ public class SuitcaseBlockEntity extends BlockEntity {
                 enteredPlayers.add(EnteredPlayerData.fromNbt((NbtCompound) e));
             }
         }
+        register();
     }
 
     @Nullable
