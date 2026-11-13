@@ -47,7 +47,7 @@
   "block.pocket-repose.crimson_exit_portal_door": "Crimson Exit Portal Door",
   "block.pocket-repose.warped_exit_portal_door": "Warped Exit Portal Door",
 
-  "block.pocket-repose.portal": "Portal Block",
+  "block.pocket-repose.portal": "Exit Portal Block",
 
   "config.pocket-repose.title": "Pocket Repose Settings",
   "config.pocket-repose.tab.pocket_dimension": "Pocket Dimension",
