@@ -1,0 +1,16 @@
+{
+  "replace": false,
+  "values": [
+    "pocket-repose:oak_exit_portal_door",
+    "pocket-repose:spruce_exit_portal_door",
+    "pocket-repose:birch_exit_portal_door",
+    "pocket-repose:jungle_exit_portal_door",
+    "pocket-repose:acacia_exit_portal_door",
+    "pocket-repose:dark_oak_exit_portal_door",
+    "pocket-repose:mangrove_exit_portal_door",
+    "pocket-repose:cherry_exit_portal_door",
+    "pocket-repose:bamboo_exit_portal_door",
+    "pocket-repose:crimson_exit_portal_door",
+    "pocket-repose:warped_exit_portal_door"
+  ]
+}
