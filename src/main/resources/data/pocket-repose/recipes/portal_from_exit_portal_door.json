@@ -1,0 +1,13 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "building",
+  "ingredients": [
+    {
+      "tag": "pocket-repose:exit_portal_doors"
+    }
+  ],
+  "result": {
+    "item": "pocket-repose:portal",
+    "count": 1
+  }
+}
