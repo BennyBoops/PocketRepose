@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "category": "misc",
+  "group": "pocket-repose:suitcase_from_pocket_block",
+  "ingredients": [
+    {
+      "tag": "pocket-repose:pocket_doors"
+    }
+  ],
+  "result": {
+    "id": "pocket-repose:suitcase",
+    "count": 1
+  }
+}
