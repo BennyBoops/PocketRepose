@@ -18,6 +18,10 @@
 		"DimensionOptionsRegistryHolderInvoker",
 		"PlayerManagerMixin"
 	],
+	"client": [
+		"RecipeBookResultsMixin",
+		"RecipeBookWidgetMixin"
+	],
 	"injectors": {
 		"defaultRequire": 1
 	}

@@ -1,5 +1,13 @@
 package net.bennyboops.modid;
 
+import java.util.List;
+import net.bennyboops.modid.client.KeyPreviewTooltip;
+import net.bennyboops.modid.item.KeyPreviewData;
+import net.bennyboops.modid.item.KeystoneItem;
+import net.bennyboops.modid.item.ModItems;
+import net.minecraft.item.Item;
+import net.minecraftforge.client.event.RegisterClientTooltipComponentFactoriesEvent;
+import net.minecraft.client.item.ModelPredicateProviderRegistry;
 import net.bennyboops.modid.client.ConfigClientNetwork;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import net.bennyboops.modid.block.ModBlocks;
@@ -37,7 +45,15 @@ public final class PocketReposeClient {
             // Door textures have see-through windows
             for (Block door : ModBlocks.POCKET_DOORS) RenderLayers.setRenderLayer(door, RenderLayer.getCutout());
             for (Block door : ModBlocks.EXIT_DOORS) RenderLayers.setRenderLayer(door, RenderLayer.getCutout());
+            // Keys look broken until they have a name (also in the anvil's output slot)
+            for (Item key : List.of(ModItems.GOLD_KEY, ModItems.IRON_KEY, ModItems.NETHERITE_KEY, ModItems.LEGACY_KEYSTONE)) {
+                ModelPredicateProviderRegistry.register(key, Identifier.of(PocketRepose.MOD_ID, "named"),
+                        (stack, world, entity, seed) -> KeystoneItem.showsRepaired(stack) ? 1f : 0f);
+            }
         }));
+        // Pictures of what each key creates, in the keys' tooltips
+        modEventBus.addListener((RegisterClientTooltipComponentFactoriesEvent event) ->
+                event.register(KeyPreviewData.class, KeyPreviewTooltip::new));
         modEventBus.addListener((EntityRenderersEvent.RegisterRenderers event) -> {
             event.registerBlockEntityRenderer(ModBlockEntities.SUITCASE_BLOCK_ENTITY, PocketBlockEntityRenderer::new);
             event.registerBlockEntityRenderer(ModBlockEntities.DOORWAY_BLOCK_ENTITY, DoorwayBlockEntityRenderer::new);

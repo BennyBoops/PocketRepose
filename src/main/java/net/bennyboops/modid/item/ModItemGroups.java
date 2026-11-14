@@ -16,8 +16,8 @@ public class ModItemGroups {
         POCKET_GROUP = ItemGroup.builder().displayName(Text.translatable("itemgroup.pocket"))
                     .icon(() -> new ItemStack(ModItems.GOLD_KEY)).entries((displayContext, entries) -> {
 
-                        entries.add(ModItems.GOLD_KEY);
                         entries.add(ModItems.IRON_KEY);
+                        entries.add(ModItems.GOLD_KEY);
                         entries.add(ModItems.NETHERITE_KEY);
                         entries.add(ModItems.EXIT_KEYSTONE);
 

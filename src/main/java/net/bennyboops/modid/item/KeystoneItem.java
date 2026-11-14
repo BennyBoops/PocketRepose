@@ -1,5 +1,7 @@
 package net.bennyboops.modid.item;
 
+import java.util.Optional;
+import net.minecraft.item.tooltip.TooltipData;
 import net.bennyboops.modid.PocketRepose;
 import net.bennyboops.modid.block.ModBlocks;
 import net.bennyboops.modid.data.MobEntryData;
@@ -64,20 +66,41 @@ public class KeystoneItem extends Item {
     /** What a key builds when it creates a new pocket dimension. */
     public enum Layout {
         /** Island Key: the full island, pocket_island_01 */
-        ISLAND("Rename to bind. Creates an island."),
+        ISLAND("island"),
         /** Blank Key: the small blank island, pocket_island_02 */
-        BLANK("Rename to bind. Creates a void."),
+        BLANK("blank"),
         /** World Key: a whole new world with normal terrain */
-        WORLD("Rename to bind. Creates a world.");
+        WORLD("world");
 
-        private final String tooltip;
+        /** The picture of what this key creates, shown in its tooltip */
+        private final Identifier preview;
 
-        Layout(String tooltip) {
-            this.tooltip = tooltip;
+        Layout(String preview) {
+            this.preview = Identifier.of(PocketRepose.MOD_ID, "textures/gui/key_preview/" + preview + ".png");
         }
     }
 
     private final Layout layout;
+
+    // An unnamed key's tooltip: how to bind it, and a picture of what it creates. A named key shows just its name
+    @Override
+    public Optional<TooltipData> getTooltipData(ItemStack stack) {
+        if (showsRepaired(stack)) return Optional.empty();
+        return Optional.of(new KeyPreviewData(layout.preview,
+                Text.literal("Rename to bind").formatted(Formatting.GRAY, Formatting.ITALIC)));
+    }
+
+    /**
+     * Whether a key looks repaired: once it has a name of its own (including in the anvil's output slot, before
+     * it's taken). Unnamed keys look broken. In an item frame, it's the frame's name that counts.
+     */
+    public static boolean showsRepaired(ItemStack stack) {
+        ItemFrameEntity frame = stack.getFrame();
+        if (frame != null) return frame.hasCustomName();
+        if (!stack.contains(DataComponentTypes.CUSTOM_NAME)) return false;
+        String name = stack.getName().getString();
+        return !name.equalsIgnoreCase(stack.getItem().getTranslationKey()) && !name.equalsIgnoreCase("Keystone");
+    }
 
     public KeystoneItem(Settings settings, Layout layout) {
         super(settings);
@@ -374,20 +397,6 @@ public class KeystoneItem extends Item {
     }
 
     @Override
-    public void appendTooltip(ItemStack stack, TooltipContext context,
-                              List<Text> tooltip, TooltipType type) {
-        boolean hasCustomName = stack.contains(DataComponentTypes.CUSTOM_NAME);
-        boolean isDefault     = Formatting.strip(stack.getName().getString())
-                .equalsIgnoreCase(getTranslationKey());
-
-        if (!hasCustomName || isDefault) {
-            tooltip.add(Text.literal(layout.tooltip)
-                    .formatted(Formatting.GRAY, Formatting.ITALIC));
-        }
-
-    }
-
-    @Override
     public void inventoryTick(ItemStack stack, World world,
                               Entity entity, int slot, boolean selected) {
         if (!world.isClient && this == ModItems.LEGACY_KEYSTONE && entity instanceof PlayerEntity player) {
@@ -403,27 +412,10 @@ public class KeystoneItem extends Item {
             bind(world.getServer(), player, stack, false);
         }
 
-        ItemFrameEntity frame = stack.getFrame();
-
-        boolean hasCustomName = stack.contains(DataComponentTypes.CUSTOM_NAME);
-
-        String displayName = stack.getName().getString();
-        boolean isDefaultName = displayName.equalsIgnoreCase(getTranslationKey())
-                || displayName.equalsIgnoreCase("Keystone");
-
-        boolean shouldShowBroken = !hasCustomName || isDefaultName;
-
-        if (frame != null) {
-            shouldShowBroken = !frame.hasCustomName();
-        }
-
-        if (shouldShowBroken) {
-            CustomModelDataComponent cmd = stack.get(DataComponentTypes.CUSTOM_MODEL_DATA);
-            if (cmd == null || cmd.value() != 1) {
-                stack.set(DataComponentTypes.CUSTOM_MODEL_DATA,
-                        new CustomModelDataComponent(1));
-            }
-        } else {
+        // Older versions marked unnamed keys with custom model data 1 to look broken; the model now works that
+        // out from the name itself (see showsRepaired), so the marker is cleared
+        CustomModelDataComponent oldMarker = stack.get(DataComponentTypes.CUSTOM_MODEL_DATA);
+        if (!world.isClient && oldMarker != null && oldMarker.value() == 1) {
             stack.remove(DataComponentTypes.CUSTOM_MODEL_DATA);
         }
 
