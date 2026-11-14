@@ -82,7 +82,7 @@ public class PocketPortalBlock extends Block {
 
     /** Tooltip for the portal block and exit portal doors. */
     public static Text exitTooltip() {
-        return Text.literal("An exit from pocket dimensions.").formatted(Formatting.GRAY, Formatting.ITALIC);
+        return Text.literal("An exit from pocket dimensions").formatted(Formatting.GRAY, Formatting.ITALIC);
     }
 
     @Override

@@ -293,7 +293,8 @@ public class SuitcaseBlock extends BlockWithEntity {
             }
 
             if (!held.hasCustomName()) {
-                player.sendMessage(Text.literal("Name the key to bind.").formatted(Formatting.RED), false);
+                // Above the hotbar, where the lock symbols show
+                player.sendMessage(Text.literal("Rename key to bind").formatted(Formatting.WHITE), true);
                 return ActionResult.FAIL;
             }
 
