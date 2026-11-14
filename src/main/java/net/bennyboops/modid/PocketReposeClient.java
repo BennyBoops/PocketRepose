@@ -1,5 +1,13 @@
 package net.bennyboops.modid;
 
+import java.util.List;
+import net.bennyboops.modid.client.KeyPreviewTooltip;
+import net.bennyboops.modid.item.KeyPreviewData;
+import net.bennyboops.modid.item.KeystoneItem;
+import net.bennyboops.modid.item.ModItems;
+import net.minecraft.item.Item;
+import net.fabricmc.fabric.api.object.builder.v1.client.model.FabricModelPredicateProviderRegistry;
+import net.fabricmc.fabric.api.client.rendering.v1.TooltipComponentCallback;
 import net.bennyboops.modid.client.ConfigClientNetwork;
 import net.bennyboops.modid.block.ModBlocks;
 import net.bennyboops.modid.block.entity.ModBlockEntities;
@@ -26,6 +34,13 @@ public class PocketReposeClient implements ClientModInitializer {
     @Override
     public void onInitializeClient() {
         ConfigClientNetwork.init();
+        // Pictures of what each key creates, in the keys' tooltips
+        TooltipComponentCallback.EVENT.register(data -> data instanceof KeyPreviewData preview ? new KeyPreviewTooltip(preview) : null);
+        // Keys look broken until they have a name (also in the anvil's output slot)
+        for (Item key : List.of(ModItems.GOLD_KEY, ModItems.IRON_KEY, ModItems.NETHERITE_KEY, ModItems.LEGACY_KEYSTONE)) {
+            FabricModelPredicateProviderRegistry.register(key, new Identifier(PocketRepose.MOD_ID, "named"),
+                    (stack, world, entity, seed) -> KeystoneItem.showsRepaired(stack) ? 1f : 0f);
+        }
         BlockEntityRendererFactories.register(ModBlockEntities.SUITCASE_BLOCK_ENTITY, PocketBlockEntityRenderer::new);
         BlockEntityRendererFactories.register(ModBlockEntities.DOORWAY_BLOCK_ENTITY, DoorwayBlockEntityRenderer::new);
         // The shader that draws open pocket blocks as a dark hallway
