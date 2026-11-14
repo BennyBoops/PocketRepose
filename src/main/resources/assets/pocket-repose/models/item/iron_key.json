@@ -1,14 +1,14 @@
 {
   "parent": "item/generated",
   "textures": {
-    "layer0": "pocket-repose:item/iron_key"
+    "layer0": "pocket-repose:item/iron_key_unnamed"
   },
   "overrides": [
     {
       "predicate": {
-        "custom_model_data": 1
+        "pocket-repose:named": 1
       },
-      "model": "pocket-repose:item/iron_key_unnamed"
+      "model": "pocket-repose:item/iron_key_named"
     }
   ]
 }
