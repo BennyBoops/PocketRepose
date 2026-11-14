@@ -7,18 +7,14 @@ import net.minecraft.entity.LivingEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.item.tooltip.TooltipType;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.sound.SoundCategory;
 import net.minecraft.sound.SoundEvents;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
 import net.minecraft.util.Hand;
 import net.minecraft.util.TypedActionResult;
 import net.minecraft.world.TeleportTarget;
 import net.minecraft.world.World;
 
-import java.util.List;
 
 /**
  * A handheld portal block: used anywhere in a pocket dimension, it takes you out. With the exitKeystone
@@ -74,8 +70,4 @@ public class ExitKeystoneItem extends Item {
         return TypedActionResult.success(stack);
     }
 
-    @Override
-    public void appendTooltip(ItemStack stack, TooltipContext context, List<Text> tooltip, TooltipType type) {
-        tooltip.add(Text.literal("A portable exit from dimensions.").formatted(Formatting.GRAY, Formatting.ITALIC));
-    }
 }
